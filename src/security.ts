@@ -21,7 +21,11 @@ export class FixedWindowLimiter {
  constructor(private readonly max=30,private readonly windowMs=60_000,private readonly now=Date.now){}
  allow(key:string):boolean{
   const time=this.now(),record=this.events.get(key);
-  if(!record||record.until<=time){this.events.set(key,{count:1,until:time+this.windowMs});return true;}
+  if(!record||record.until<=time){
+   if(this.events.size>=4096){for(const [id,entry] of this.events){if(entry.until<=time)this.events.delete(id);}}
+   if(!this.events.has(key)&&this.events.size>=4096)return false;
+   this.events.set(key,{count:1,until:time+this.windowMs});return true;
+  }
   if(record.count>=this.max)return false;
   record.count++;return true;
  }
