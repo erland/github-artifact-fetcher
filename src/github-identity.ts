@@ -80,7 +80,13 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
    if(new Date(item.token_expires_at).getTime()>this.now()+60000){await client.query('COMMIT');return this.dec(item.encrypted_token);}
    if(!item.encrypted_refresh_token||new Date(item.refresh_expires_at).getTime()<=this.now()){await client.query('ROLLBACK');return null;}
    const response=await this.fetcher('https://github.com/login/oauth/access_token',{method:'POST',headers:{accept:'application/json','content-type':'application/json'},body:JSON.stringify({client_id:this.config.clientId,client_secret:this.config.clientSecret,grant_type:'refresh_token',refresh_token:this.dec(item.encrypted_refresh_token)})});
-   if(!response.ok)throw Error('github_refresh_failed');
+   if(!response.ok){
+    if([400,401,403].includes(response.status)){
+     await client.query('ROLLBACK');
+     return null;
+    }
+    throw Error('github_refresh_failed');
+   }
    const rotated=await response.json() as {access_token?:string;refresh_token?:string;expires_in?:number;refresh_token_expires_in?:number};
    if(!rotated.access_token||!rotated.refresh_token)throw Error('invalid_refresh_response');
    await client.query('UPDATE github_connections SET encrypted_token=$2,encrypted_refresh_token=$3,token_expires_at=$4,refresh_expires_at=$5,updated_at=NOW() WHERE user_subject=$1',[user,this.enc(rotated.access_token),this.enc(rotated.refresh_token),new Date(this.now()+(rotated.expires_in??28800)*1000),new Date(this.now()+(rotated.refresh_token_expires_in??15552000)*1000)]);
@@ -91,6 +97,7 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
   const db=await this.config.pool.connect();
   try{
    await db.query('BEGIN');
+   await db.query('DELETE FROM github_installation_users WHERE user_subject=$1',[user]);
    await db.query('DELETE FROM github_connections WHERE user_subject=$1',[user]);
    await db.query('DELETE FROM oauth_sessions WHERE user_subject=$1',[user]);
    await db.query('UPDATE mcp_oauth_grants SET consumed_at=NOW() WHERE user_subject=$1 AND consumed_at IS NULL',[user]);
@@ -120,7 +127,10 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
     for(let rp=1;rp<=10;rp++){
      const list=await get('https://api.github.com/user/installations/'+install.id+'/repositories?per_page=100&page='+rp);
      if(!list||!Array.isArray(list.repositories))return false;
-     if(list.repositories.some((entry:any)=>entry.id===repository.id&&entry.full_name?.toLowerCase()===repository.full_name.toLowerCase()&&entry.permissions?.pull===true))return true;
+     if(list.repositories.some((entry:any)=>entry.id===repository.id&&entry.full_name?.toLowerCase()===repository.full_name.toLowerCase()&&entry.permissions?.pull===true)){
+      await this.config.pool.query('INSERT INTO github_installation_users(installation_id,user_subject) VALUES($1,$2) ON CONFLICT DO NOTHING',[install.id,user]);
+      return true;
+     }
      if(list.repositories.length<100)break;
     }
    }
