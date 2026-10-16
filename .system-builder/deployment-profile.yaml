@@ -1,0 +1,18 @@
+platform: coolify
+container_count: 1
+postgresql:
+  existing_instance: true
+  separate_database: github_artifact_fetcher
+  auto_migrate_on_startup: true
+  tool: flyway
+external_services:
+  - github_api
+  - ghcr
+secrets:
+  - DATABASE_MIGRATION_URL
+  - DATABASE_MIGRATION_PASSWORD
+  - DATABASE_RUNTIME_URL
+  - DATABASE_RUNTIME_PASSWORD
+  - ENCRYPTION_KEY
+  - GITHUB_APP_CLIENT_ID
+  - GITHUB_APP_CLIENT_SECRET

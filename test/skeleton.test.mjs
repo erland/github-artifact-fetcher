@@ -1,0 +1,6 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from '../dist/server.js';
+import {parseArtifactRequest} from '../dist/contracts.js';
+test('artifact contract accepts valid sources and rejects invalid repository',()=>{assert.equal(parseArtifactRequest({source:'release',repository:'example/repo',selector:'v1'}).source,'release');assert.throws(()=>parseArtifactRequest({source:'release',repository:'../../etc',selector:'x'}));});
+test('MCP skeleton capabilities truthful',async()=>{const server=createServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));try{const port=server.address().port;const url=`http://127.0.0.1:${port}`;const health=await fetch(url+'/health').then(r=>r.json());assert.equal(health.status,'ok');const call=async(method,params)=>fetch(url+'/mcp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}).then(r=>r.json());assert.equal((await call('initialize',{})).result.serverInfo.name,'github-artifact-fetcher');assert.equal((await call('tools/list',{})).result.tools[0].name,'get_capabilities');assert.match((await call('tools/call',{name:'get_capabilities'})).result.content[0].text,/"release":false/);}finally{await new Promise(resolve=>server.close(resolve));}});

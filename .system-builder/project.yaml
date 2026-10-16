@@ -1,0 +1,12 @@
+name: github-artifact-fetcher
+mode: CREATE
+phase: implementation_pending
+source: planning_zip
+language: sv
+repository_proposed: erland/github-artifact-fetcher
+stack:
+  runtime: nodejs-typescript
+  protocol: mcp-streamable-http
+  database: dedicated_postgresql_database_existing_instance
+  migrations: flyway_startup
+  deployment: coolify_docker

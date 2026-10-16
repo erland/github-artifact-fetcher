@@ -1,0 +1,1 @@
+{"name":"github-artifact-fetcher","version":"0.2.0-dev002","private":true,"type":"module","engines":{"node":">=22"},"scripts":{"build":"tsc -p tsconfig.json","start":"node dist/server.js","test":"node --test test/*.test.mjs","test:poc":"node --test test/poc.test.mjs","verify":"npm run build && npm test"}}
