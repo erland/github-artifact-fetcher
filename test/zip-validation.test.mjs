@@ -29,3 +29,13 @@ test('reject truncated ZIP and unsupported flags',()=>{
  assert.throws(()=>validateZip(archive().subarray(0,40)),/INVALID_ZIP/);
  const encrypted=archive();encrypted.writeUInt16LE(0x801,6);encrypted.writeUInt16LE(0x801,encrypted.readUInt32LE(encrypted.length-22+16)+8);assert.throws(()=>validateZip(encrypted),/INVALID_ZIP/);
 });
+
+test('reject ambiguous ZIP prefix and unaccounted local data',()=>{
+ const valid=archive('ok.txt');
+ const prefixed=Buffer.concat([Buffer.from('prefix'),valid]);
+ assert.throws(()=>validateZip(prefixed),/INVALID_ZIP/);
+ const central=valid.readUInt32LE(valid.length-22+16);
+ const padded=Buffer.concat([valid.subarray(0,central),Buffer.from([1,2,3]),valid.subarray(central)]);
+ padded.writeUInt32LE(central+3,padded.length-22+16);
+ assert.throws(()=>validateZip(padded),/INVALID_ZIP/);
+});
