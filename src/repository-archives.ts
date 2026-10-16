@@ -1,3 +1,4 @@
+import {validateZip} from './zip-validation.js';
 import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 import type {GitHubCredentials,FileOutput} from './releases.js';
@@ -59,7 +60,7 @@ export class RepositoryArchives {
   try{while(true){const {done,value}=await reader.read();if(done)break;const b=Buffer.from(value);size+=b.length;if(size>MAX_BYTES)throw Error('ARCHIVE_TOO_LARGE');chunks.push(b);}}
   finally{await reader.cancel().catch(()=>{});}
   const bytes=Buffer.concat(chunks);
-  if(!zipSignature(bytes))throw Error('INVALID_ZIP');
+  validateZip(bytes);
   const digest=createHash('sha256').update(bytes).digest('hex');
   return {filename:`${name}-${sha.slice(0,12)}.zip`,mimeType:'application/zip',sizeBytes:size,sha256:digest,dataBase64:bytes.toString('base64')};
  }
