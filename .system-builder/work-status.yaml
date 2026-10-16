@@ -1,21 +1,27 @@
 project: github-artifact-fetcher
 phase: create_implementation
 planning_complete: true
-selected_step: DEV-004
-in_progress: DEV-004
+selected_step: null
+in_progress: null
 completed_steps:
   - DEV-001
   - DEV-002
   - DEV-003
+  - DEV-004
 next:
-  recommended: DEV-004-verification
-  reason: OAuth authorization code PKCE and persistent tokens implemented; integration CI and security review are required before completion.
+  recommended: DEV-005
+  reason: MCP OAuth server, PKCE, rotating tokens, PostgreSQL migration and CI tests verified; connect trusted GitHub identity next.
 verification:
   dev003: passed
   oauth_flyway_migration: passed
-  oauth_integration_tests: pending
-  github_ci_run: 38848189965
+  oauth_integration_tests: passed
+  sdk_contract_tests: passed
+  docker_build: passed
+  github_ci: passed
+  implementation_revision: afe963170eb36e661be7964754b9a6bb27638019
+  github_ci_run: 38848924654
   chatgpt_live_handoff: deferred_external_acceptance
+  evidence_reference: docs/DEV-004.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_mcp_oauth: required_before_release
