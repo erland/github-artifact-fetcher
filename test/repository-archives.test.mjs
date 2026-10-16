@@ -41,3 +41,7 @@ test('redirect and archive signature checked',async()=>{
  await assert.rejects(setup({redirect:'https://attacker.example/bad'}).api.download('github:1','demo/repo',{kind:'branch',value:'main'}),/UNTRUSTED_REDIRECT/);
  await assert.rejects(setup({bytes:Buffer.from('not zip')}).api.download('github:1','demo/repo',{kind:'branch',value:'main'}),/INVALID_ZIP/);
 });
+
+test('repository rejects truncated ZIP central directory',async()=>{
+ await assert.rejects(setup({bytes:Buffer.from([80,75,3,4,0,0,0,0])}).api.download('github:1','demo/repo',{kind:'branch',value:'main'}),/INVALID_ZIP/);
+});
