@@ -14,30 +14,27 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-remaining-release-gates
-  reason: GitHub App installation and per-repository permissions, GitHub 401 revocation and user isolation pass CI. Live GitHub App acceptance, webhook revocation and native ChatGPT file handoff remain open.
+  recommended: DEV-010-remaining-acceptance
+  reason: HMAC-verified installation webhooks, replay tracking, isolated revocation and permanent refresh denial pass CI. Live integration and native ChatGPT attachments remain unverified.
 verification:
-  oauth_registration_allowlist: passed
-  oauth_token_revocation: passed
-  oauth_security_tests: passed
+  github_webhook_signature_tests: passed
+  github_webhook_installation_revocation: passed
+  github_refresh_denial_isolation: passed
+  flyway_v6: passed
   github_ci: passed
   docker_build: passed
-  implementation_revision: d830ebda8d783418147ed133476838732fbb7974
-  github_ci_run: 38888704392
+  implementation_revision: 3af1aa0253e200f0ced12f6c07b41e987b7c38a8
+  github_ci_run: 38890957170
   native_chatgpt_file_attachment: unverified
-  live_github_downloads: unverified
+  live_github_webhook: unverified
   coolify_staging: not_deployed
-  github_app_permission_tests: passed
-  github_401_isolation_tests: passed
-  github_app_permission_ci_run: 38890327674
-  github_app_permission_implementation_revision: 4018e025b4cbad7b3d75e95919bbcf2812a05fc8
-  evidence_reference: docs/DEV-010-github-app-permissions.md
+  evidence_reference: docs/DEV-010-webhook-revocation.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
   live_mcp_oauth: required_before_release
   live_github_app_callback: required_before_release
+  live_github_webhooks: required_before_release
   distributed_rate_limit_and_log_retention: required_before_release
-  github_app_permissions_and_revocation: required_before_release
   archive_validation: required_before_release
   production_compose_startup: required_before_release
