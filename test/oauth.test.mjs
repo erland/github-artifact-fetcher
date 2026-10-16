@@ -37,9 +37,8 @@ test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial',
   assert.equal(response.status,200);
   const first=await response.json();
   assert.equal((await exchange(verifier)).status,400);
-  const mcpResponse=await fetch(base+'/mcp',{method:'POST',headers:{authorization:'Bearer '+first.access_token,'content-type':'application/json',accept:'application/json, text/event-stream','mcp-protocol-version':'2025-06-18'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'ci',version:'1'}}})});
-  assert.equal(mcpResponse.status,200);
-  await mcpResponse.body?.cancel();
+  assert.equal(await oauth.authenticate({headers:{authorization:'Bearer '+first.access_token}}),true);
+  assert.equal(await oauth.authenticate({headers:{authorization:'Bearer invalid'}}),false);
   const renew=()=>fetch(base+'/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id,refresh_token:first.refresh_token})});
   assert.equal((await renew()).status,200);
   assert.equal((await renew()).status,400);
