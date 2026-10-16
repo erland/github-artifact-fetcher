@@ -14,8 +14,8 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-release-acceptance
-  reason: DEV-010 preparations are CI verified, but real ChatGPT native attachments, GitHub live integrations and Coolify deployment acceptance remain unverified by deliberate no-deployment constraint.
+  recommended: DEV-010-oauth-binding
+  reason: Targeted release review identified OAuth consent binding and remaining native file acceptance gaps; fix in PR before requesting deployment.
 verification:
   explicit_oauth_consent_csrf: passed_ci
   capped_rate_limiter: passed_ci
@@ -28,7 +28,10 @@ verification:
   native_chatgpt_file_attachment: unverified
   live_github_downloads: unverified
   coolify_staging: not_deployed
-  evidence_reference: docs/DEV-010-acceptance.md
+  security_review_implementation_revision: 97846886dd630acf3275a3fbdd0dbc2a43ecb507
+  security_review_ci_run: 38859107189
+  download_memory_cap: passed_ci
+  evidence_reference: docs/DEV-010-security-review.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
