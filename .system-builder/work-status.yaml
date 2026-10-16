@@ -9,27 +9,27 @@ completed_steps:
   - DEV-003
   - DEV-004
   - DEV-005
+  - DEV-006
 next:
-  recommended: DEV-006
-  reason: GitHub App OAuth trusted identity, encrypted rotating tokens and repository permission tests passed. Implement release asset retrieval next.
+  recommended: DEV-007
+  reason: Release list/download, content hash and size validation, redirect safety and access checks passed CI; implement Actions artifacts.
 verification:
-  github_oauth_identity_tests: passed
-  github_token_encryption_rotation: passed
-  repository_access_checks: passed
-  oauth_state_replay: passed
-  flyway_v4: passed
-  postgres_integration: passed
-  sdk_contract_tests: passed
+  release_asset_tests: passed
+  release_sha256_size_checks: passed
+  release_redirect_security: passed
+  release_repository_access: passed
+  all_runtime_tests: passed_18_of_18
   docker_build: passed
   github_ci: passed
-  implementation_revision: 1b4557efc4aff7f07f17003d56c0bb29b9a24932
-  github_ci_run: 38849479058
+  implementation_revision: 87534b6f0ff0e4dfb7e4035987acc282eeae504b
+  github_ci_run: 38850026128
+  github_live_release_download: deferred_external_acceptance
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-005.md
+  evidence_reference: docs/DEV-006.md
 release_gates:
   chatgpt_file_handoff: required_before_release
+  live_github_asset_download: required_before_release
   live_mcp_oauth: required_before_release
   live_github_app_callback: required_before_release
-  github_app_installation_permissions: required_before_release
   public_oauth_security_hardening: required_before_release
   production_compose_startup: required_before_release
