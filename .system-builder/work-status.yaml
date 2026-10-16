@@ -10,24 +10,24 @@ completed_steps:
   - DEV-004
   - DEV-005
   - DEV-006
+  - DEV-007
 next:
-  recommended: DEV-007
-  reason: Release list/download, content hash and size validation, redirect safety and access checks passed CI; implement Actions artifacts.
+  recommended: DEV-008
+  reason: Workflow run artifact list, ZIP download, expiry and redirect validation, and CI tests verified; implement repository archives.
 verification:
-  release_asset_tests: passed
-  release_sha256_size_checks: passed
-  release_redirect_security: passed
-  release_repository_access: passed
-  all_runtime_tests: passed_18_of_18
-  docker_build: passed
+  actions_artifact_tests: passed
+  actions_expiry_and_permissions: passed
+  actions_redirect_zip_limits: passed
   github_ci: passed
-  implementation_revision: 87534b6f0ff0e4dfb7e4035987acc282eeae504b
-  github_ci_run: 38850026128
-  github_live_release_download: deferred_external_acceptance
+  docker_build: passed
+  implementation_revision: fa1649f0266d174f5b0531459bab9fbdb56cda40
+  github_ci_run: 38850590486
+  github_live_actions_download: deferred_external_acceptance
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-006.md
+  evidence_reference: docs/DEV-007.md
 release_gates:
   chatgpt_file_handoff: required_before_release
+  live_github_actions_download: required_before_release
   live_github_asset_download: required_before_release
   live_mcp_oauth: required_before_release
   live_github_app_callback: required_before_release
