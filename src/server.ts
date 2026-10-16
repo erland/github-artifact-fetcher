@@ -47,7 +47,7 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
   for(const name of ['PUBLIC_BASE_URL','GITHUB_APP_CLIENT_ID','GITHUB_APP_CLIENT_SECRET','GITHUB_WEBHOOK_SECRET','ENCRYPTION_KEY','OAUTH_ALLOWED_REDIRECT_HOSTS'])if(!process.env[name])throw Error('MISSING_CONFIG_'+name);
  }
  const identity=options.identity??(poolOptions&&process.env.PUBLIC_BASE_URL&&process.env.GITHUB_APP_CLIENT_ID&&process.env.GITHUB_APP_CLIENT_SECRET&&process.env.ENCRYPTION_KEY?new GitHubIdentity({pool:new Pool({...poolOptions,max:5}),clientId:process.env.GITHUB_APP_CLIENT_ID,clientSecret:process.env.GITHUB_APP_CLIENT_SECRET,publicBaseUrl:process.env.PUBLIC_BASE_URL,encryptionKey:Buffer.from(process.env.ENCRYPTION_KEY,'base64')}):undefined);
- const oauth=options.oauth??(poolOptions&&process.env.PUBLIC_BASE_URL?new OAuth({issuer:process.env.PUBLIC_BASE_URL,pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),principal:identity?req=>identity.principal(req):async()=>null}):undefined);
+ const oauth=options.oauth??(poolOptions&&process.env.PUBLIC_BASE_URL?new OAuth({issuer:process.env.PUBLIC_BASE_URL,pool:new Pool({...poolOptions,max:5}),principal:identity?req=>identity.principal(req):async()=>null}):undefined);
  const database=options.database??(poolOptions?createDatabaseProbe(poolOptions):undefined);
  return http.createServer(async(req,res)=>{
   securityHeaders(res);
