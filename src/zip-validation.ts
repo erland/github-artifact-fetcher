@@ -13,10 +13,12 @@ export function validateZip(buf:Buffer):{entries:number;uncompressedBytes:number
  for(let i=0;i<entries;i++){
   if(cursor+46>eocd||buf.readUInt32LE(cursor)!==0x02014b50)invalid();
   const flags=buf.readUInt16LE(cursor+8),method=buf.readUInt16LE(cursor+10),crc=buf.readUInt32LE(cursor+16),compressed=buf.readUInt32LE(cursor+20),raw=buf.readUInt32LE(cursor+24),n=buf.readUInt16LE(cursor+28),extra=buf.readUInt16LE(cursor+30),comment=buf.readUInt16LE(cursor+32),disk=buf.readUInt16LE(cursor+34),local=buf.readUInt32LE(cursor+42);
-  if(flags&1||flags&8||!(flags&0x800)||![0,8].includes(method)||disk||compressed===0xffffffff||raw===0xffffffff||local===0xffffffff||raw>MAX_ENTRY||compressed>buf.length||cursor+46+n+extra+comment>eocd)invalid();
+  if(flags&1||flags&8||![0,8].includes(method)||disk||compressed===0xffffffff||raw===0xffffffff||local===0xffffffff||raw>MAX_ENTRY||compressed>buf.length||cursor+46+n+extra+comment>eocd)invalid();
   const name=buf.subarray(cursor+46,cursor+46+n).toString('utf8');
   if(!name||name.includes('\\')||name.startsWith('/')||/^[A-Za-z]:/.test(name)||name.split('/').some(x=>x==='..'||x==='.')||name.includes('\0')||seen.has(name))invalid();
   seen.add(name);
+  const unixMode=buf.readUInt32LE(cursor+38)>>>16;
+  if((buf.readUInt16LE(cursor+4)>>>8)===3&&unixMode!==0&&((unixMode&0xf000)!==0x8000&&(unixMode&0xf000)!==0x4000))invalid();
   if(raw>0&&compressed===0||raw>compressed*MAX_RATIO&&raw>1024)throw Error('ZIP_BOMB');
   total+=raw;if(total>MAX_UNCOMPRESSED)throw Error('ZIP_BOMB');
   if(local+30>offset||buf.readUInt32LE(local)!==0x04034b50)invalid();
