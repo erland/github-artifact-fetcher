@@ -1,29 +1,23 @@
 project: github-artifact-fetcher
 phase: create_implementation
 planning_complete: true
-selected_step: null
-in_progress: null
+selected_step: DEV-004
+in_progress: DEV-004
 completed_steps:
   - DEV-001
   - DEV-002
   - DEV-003
 next:
-  recommended: DEV-004
-  reason: PostgreSQL Flyway migrations, least-privilege role, CI integration tests and Docker verified; implement MCP OAuth.
+  recommended: DEV-004-verification
+  reason: OAuth authorization code PKCE and persistent tokens implemented; integration CI and security review are required before completion.
 verification:
-  typescript_build: passed
-  runtime_tests: passed
-  docker_build: passed
-  github_ci: passed
-  database_integration: passed
-  flyway_migrate_validate_repeat: passed
-  runtime_ddl_denied: passed
-  implementation_revision: 60155907f68685bd8a5f678db9c3ae6bf8f3a99c
-  github_ci_run: 38847831060
+  dev003: passed
+  oauth_flyway_migration: passed
+  oauth_integration_tests: pending
+  github_ci_run: 38848189965
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-003.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_mcp_oauth: required_before_release
+  github_identity_integration: DEV-005
   production_compose_startup: required_before_release
-  sdk_conformance: passed_dev002
