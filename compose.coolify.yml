@@ -1,5 +1,7 @@
-# Prepared for later Coolify deployment; not deployed or tested against Coolify.
-# Coolify should route TLS to app:3000 and only expose the app through its proxy.
+# Prepared for Coolify using a published GHCR application image and external PostgreSQL.
+# This Compose file must be sourced from the SAME Git release tag as GHAF_IMAGE_TAG,
+# because Flyway reads SQL migrations from the versioned repository checkout.
+# Coolify should route TLS to app:3000; do not expose port 3000 publicly.
 services:
   migrate:
     image: flyway/flyway:11.18
@@ -12,7 +14,8 @@ services:
       - ./db/migration:/flyway/sql:ro
     restart: "no"
   app:
-    build: .
+    image: ghcr.io/erland/github-artifact-fetcher:${GHAF_IMAGE_TAG:?set GHAF_IMAGE_TAG to a published version such as 0.5.0}
+    pull_policy: always
     restart: unless-stopped
     environment:
       PORT: "3000"
