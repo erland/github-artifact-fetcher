@@ -9,7 +9,7 @@ export class ReleaseService {
  constructor(private readonly identity:GitHubCredentials,private readonly fetcher:typeof fetch=fetch){}
  private async authorized(user:string,repository:string){
   const parts=repository.split('/');
-  if(parts.length!==2||!parts.every(p=>repoPattern.test(p)))throw Error('INVALID_REPOSITORY');
+  if(parts.length!==2||!parts.every(p=>repoPattern.test(p)&&p!=='.'&&p!=='..'))throw Error('INVALID_REPOSITORY');
   const [owner,name]=parts as [string,string];
   if(!await this.identity.repositoryAllowed(user,owner,name))throw Error('REPOSITORY_FORBIDDEN');
   const token=await this.identity.tokenFor(user);
