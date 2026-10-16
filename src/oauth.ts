@@ -59,7 +59,7 @@ export class OAuth {
    const q=url.searchParams,client=q.get('client_id')??'',redirect=q.get('redirect_uri')??'';
    if(!await this.client(client,redirect))return error(res,400,'invalid_request'),true;
    const state=q.get('state')??'',challenge=q.get('code_challenge')??'';
-   if(q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8)return error(res,400,'invalid_request'),true;
+   if(q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8||state.length>512)return error(res,400,'invalid_request'),true;
    const user=await this.config.principal(req);
    if(!user)return error(res,401,'login_required'),true;
    const code=secret();await this.store('code',code,client,user,'mcp',120,redirect,challenge);
@@ -69,6 +69,7 @@ export class OAuth {
   if(req.method==='POST'&&path==='/token'){
    let q:URLSearchParams;try{q=await form(req);}catch{return error(res,400,'invalid_request'),true;}
    const kind=q.get('grant_type'),client=q.get('client_id')??'',token=kind==='authorization_code'?q.get('code'):q.get('refresh_token');
+   if(kind!=='authorization_code'&&kind!=='refresh_token')return error(res,400,'unsupported_grant_type'),true;
    if(!token||!client)return error(res,400,'invalid_request'),true;
    const db=await this.config.pool.connect();
    try{
