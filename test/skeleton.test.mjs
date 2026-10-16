@@ -10,10 +10,11 @@ test('official MCP SDK contract',async()=>{
   const url='http://127.0.0.1:'+server.address().port;
   assert.equal((await fetch(url+'/ready')).status,200);
   const call=async(method,params)=>{
-   const r=await fetch(url+'/mcp',{method:'POST',headers:{'content-type':'application/json','accept':'application/json, text/event-stream','mcp-protocol-version':'2025-06-18'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
-   assert.equal(r.status,200);
-   const text=await r.text();
-   return JSON.parse(text.startsWith('data:')?text.split('\n').find(s=>s.startsWith('data:')).slice(5).trim():text);
+   const response=await fetch(url+'/mcp',{method:'POST',headers:{'content-type':'application/json','accept':'application/json, text/event-stream','mcp-protocol-version':'2025-06-18'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
+   assert.equal(response.status,200);
+   const body=await response.text();
+   const line=body.split(/\r?\n/).find(line=>line.startsWith('data:'));
+   return JSON.parse(line?line.slice(5).trim():body);
   };
   assert.equal((await call('initialize',{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'ci',version:'1'}})).result.serverInfo.name,'github-artifact-fetcher');
   assert.equal((await call('tools/list',{})).result.tools[0].name,'get_capabilities');
