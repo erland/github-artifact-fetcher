@@ -7,9 +7,9 @@ services:
     image: flyway/flyway:11.18
     command: -connectRetries=30 -locations=filesystem:/flyway/sql migrate
     environment:
-      FLYWAY_URL: ${FLYWAY_JDBC_URL:?required}
-      FLYWAY_USER: ${DATABASE_MIGRATION_USER:?required}
-      FLYWAY_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?required}
+      FLYWAY_URL: jdbc:postgresql://${DB_HOST:?required}:${DB_PORT:-5432}/${DB_NAME:?required}
+      FLYWAY_USER: ${DB_MIGRATION_USER:?required}
+      FLYWAY_PASSWORD: ${DB_MIGRATION_PASSWORD:?required}
     volumes:
       - ./db/migration:/flyway/sql:ro
     restart: "no"
@@ -20,7 +20,11 @@ services:
     environment:
       PORT: "3000"
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL:?required}
+      DB_HOST: ${DB_HOST:?required}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:?required}
+      DB_USER: ${DB_USER:?required}
+      DB_PASSWORD: ${DB_PASSWORD:?required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?required}
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?required}
       GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?required}
