@@ -11,6 +11,7 @@ import {ReleaseService} from './releases.js';
 import {ActionsArtifacts} from './actions-artifacts.js';
 import {RepositoryArchives} from './repository-archives.js';
 import {EphemeralFiles} from './file-delivery.js';
+import {stageHandoff} from './file-handoff-contract.js';
 import {GitHubWebhooks} from './github-webhooks.js';
 import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:EphemeralFiles,publicBaseUrl:string){
@@ -21,11 +22,11 @@ function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:Ephemera
    const releases=new ReleaseService(identity);
    const actions=new ActionsArtifacts(identity);
    const archives=new RepositoryArchives(identity);
-   server.registerTool('fetch_repository_archive',{description:'Download a repository ZIP at an explicit branch, tag or full commit SHA, with controlled redirect and SHA-256',inputSchema:z.object({repository:z.string(),refKind:z.enum(['branch','tag','commit']),ref:z.string()})},async({repository,refKind,ref})=>({content:[{type:'text',text:JSON.stringify(files.stage(await archives.download(user,repository,{kind:refKind,value:ref}),publicBaseUrl))}]}));
+   server.registerTool('fetch_repository_archive',{description:'Download a repository ZIP at an explicit branch, tag or full commit SHA, with controlled redirect and SHA-256',inputSchema:z.object({repository:z.string(),refKind:z.enum(['branch','tag','commit']),ref:z.string()})},async({repository,refKind,ref})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await archives.download(user,repository,{kind:refKind,value:ref}),publicBaseUrl))}]}));
    server.registerTool('list_workflow_artifacts',{description:'List GitHub Actions artifacts scoped to a workflow run',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive()})},async({repository,runId})=>({content:[{type:'text',text:JSON.stringify(await actions.list(user,repository,runId))}]}));
-   server.registerTool('fetch_workflow_artifact',{description:'Fetch a workflow-run artifact as a bounded ZIP/base64 response with SHA-256 (not a ChatGPT attachment)',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive(),artifactId:z.number().int().positive()})},async({repository,runId,artifactId})=>({content:[{type:'text',text:JSON.stringify(files.stage(await actions.download(user,repository,runId,artifactId),publicBaseUrl))}]}));
+   server.registerTool('fetch_workflow_artifact',{description:'Fetch a workflow-run artifact as a one-use HTTPS handoff descriptor with SHA-256 (not a native ChatGPT attachment)',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive(),artifactId:z.number().int().positive()})},async({repository,runId,artifactId})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await actions.download(user,repository,runId,artifactId),publicBaseUrl))}]}));
    server.registerTool('list_release_assets',{description:'List GitHub release assets for a tag',inputSchema:z.object({repository:z.string(),tag:z.string()})},async({repository,tag})=>({content:[{type:'text',text:JSON.stringify(await releases.list(user,repository,tag))}]}));
-   server.registerTool('fetch_release_asset',{description:'Fetch a GitHub release asset, returning bounded base64 bytes and SHA-256 (not yet a ChatGPT internal attachment)',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>({content:[{type:'text',text:JSON.stringify(files.stage(await releases.fetch(user,repository,tag,assetName),publicBaseUrl))}]}));
+   server.registerTool('fetch_release_asset',{description:'Fetch a GitHub release asset, returning a versioned one-use HTTPS handoff descriptor, not a native ChatGPT attachment',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await releases.fetch(user,repository,tag,assetName),publicBaseUrl))}]}));
   }
   return server;
  });
