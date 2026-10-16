@@ -77,6 +77,7 @@ export class OAuth {
    const cookies=(req.headers.cookie??'').split(';').map(x=>x.trim());
    const cookieRequest=cookies.find(x=>x.startsWith('ghaf_consent='))?.slice('ghaf_consent='.length)??'';
    res.setHeader('set-cookie','ghaf_consent=; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=0');
+   if([...q.keys()].some(key=>!['request','csrf','decision'].includes(key))||['request','csrf','decision'].some(key=>q.getAll(key).length!==1))return error(res,403,'invalid_consent'),true;
    const supplied=q.get('request')??'',csrf=q.get('csrf')??'';
    if(!/^[A-Za-z0-9_-]{43}$/.test(cookieRequest)||!secureEqual(cookieRequest,supplied)||!/^[A-Za-z0-9_-]{43}$/.test(csrf)||!['approve','deny'].includes(q.get('decision')??''))return error(res,403,'invalid_consent'),true;
    const user=await this.config.principal(req);
