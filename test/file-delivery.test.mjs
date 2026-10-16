@@ -24,3 +24,10 @@ test('expiry, integrity and storage cap are fail-closed',()=>{
  assert.equal(files.serve(new URL(a.url).pathname.split('/').pop(),{writeHead(){},end(){}}),false);
  assert.throws(()=>files.stage({...sample,sha256:'0'.repeat(64)},'https://download.example.test'),/FILE_INTEGRITY_FAILED/);
 });
+
+test('total memory budget and HTTPS-origin enforcement',()=>{
+ const files=new EphemeralFiles(()=>0,16,120000,content.length);
+ files.stage(sample,'https://download.example.test');
+ assert.throws(()=>files.stage(sample,'https://download.example.test'),/FILE_CAPACITY_EXCEEDED/);
+ assert.throws(()=>new EphemeralFiles().stage(sample,'http://localhost:3000'),/INVALID_DOWNLOAD_ORIGIN/);
+});
