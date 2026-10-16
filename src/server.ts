@@ -7,13 +7,17 @@ import {OAuth, type PrincipalResolver} from './oauth.js';
 import {Pool} from 'pg';
 import {GitHubIdentity} from './github-identity.js';
 import {ReleaseService} from './releases.js';
+import {ActionsArtifacts} from './actions-artifacts.js';
 import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined){
  const handler=createMcpHandler(()=>{
-  const server=new McpServer({name:'github-artifact-fetcher',version:'0.6.0-dev006'},{capabilities:{tools:{}}});
-  server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:false,repository:false,packages:false,liveChatGptHandoff:false})}]}));
+  const server=new McpServer({name:'github-artifact-fetcher',version:'0.7.0-dev007'},{capabilities:{tools:{}}});
+  server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:false,packages:false,liveChatGptHandoff:false})}]}));
   if(identity){
    const releases=new ReleaseService(identity);
+   const actions=new ActionsArtifacts(identity);
+   server.registerTool('list_workflow_artifacts',{description:'List GitHub Actions artifacts scoped to a workflow run',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive()})},async({repository,runId})=>({content:[{type:'text',text:JSON.stringify(await actions.list(user,repository,runId))}]}));
+   server.registerTool('fetch_workflow_artifact',{description:'Fetch a workflow-run artifact as a bounded ZIP/base64 response with SHA-256 (not a ChatGPT attachment)',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive(),artifactId:z.number().int().positive()})},async({repository,runId,artifactId})=>({content:[{type:'text',text:JSON.stringify(await actions.download(user,repository,runId,artifactId))}]}));
    server.registerTool('list_release_assets',{description:'List GitHub release assets for a tag',inputSchema:z.object({repository:z.string(),tag:z.string()})},async({repository,tag})=>({content:[{type:'text',text:JSON.stringify(await releases.list(user,repository,tag))}]}));
    server.registerTool('fetch_release_asset',{description:'Fetch a GitHub release asset, returning bounded base64 bytes and SHA-256 (not yet a ChatGPT internal attachment)',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>({content:[{type:'text',text:JSON.stringify(await releases.fetch(user,repository,tag,assetName))}]}));
   }
