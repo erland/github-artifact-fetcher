@@ -1,3 +1,4 @@
+import {validateZip} from './zip-validation.js';
 import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 export type ReleaseAsset={id:number;name:string;size:number;content_type:string;digest?:string|null;browser_download_url?:string};
@@ -68,6 +69,7 @@ export class ReleaseService {
   if(asset.digest){
    if(!/^sha256:[0-9a-f]{64}$/i.test(asset.digest)||asset.digest.slice(7).toLowerCase()!==digest)throw Error('CHECKSUM_MISMATCH');
   }
+  if(asset.name.toLowerCase().endsWith('.zip')||asset.content_type==='application/zip')validateZip(bytes);
   return {filename:asset.name,mimeType:asset.content_type||'application/octet-stream',sizeBytes:total,sha256:digest,dataBase64:bytes.toString('base64')};
  }
 }
