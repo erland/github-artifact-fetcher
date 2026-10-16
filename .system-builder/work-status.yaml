@@ -14,8 +14,8 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-platform-acceptance
-  reason: Consolidated review and optimized ZIP parsing pass CI. Native ChatGPT attachment semantics, live GitHub App and Coolify tests are blocked until an authorized integration environment exists.
+  recommended: DEV-010-live-client-file-acceptance
+  reason: Versioned HTTPS file handoff contract and deterministic ZIP/PDF/EPUB tests pass CI. Native ChatGPT attachment remains unverified; external GitHub and Coolify acceptance intentionally deferred.
 verification:
   security_retention_tests: passed
   retention_runtime_least_privilege: passed
@@ -38,7 +38,13 @@ verification:
   consolidated_review_implementation_revision: 97d2381aa9483a69ed84ff43a0adcabd7699622b
   consolidated_review_ci_run: 38916169686
   release_decision: blocked_pending_external_acceptance
-  evidence_reference: docs/DEV-010-consolidated-release-review.md
+  file_handoff_contract_version: 1
+  file_handoff_delivery_type: one_time_https_url
+  file_handoff_native_attachment: unverified
+  file_formats_acceptance_ci: passed_zip_pdf_epub
+  file_handoff_implementation_revision: 96e1dce92fe8e12be38fd84b2bf70b8fa6dd7046
+  file_handoff_ci_run: 38925934682
+  evidence_reference: docs/DEV-010-file-handoff-contract.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
