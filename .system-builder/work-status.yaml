@@ -14,8 +14,8 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-live-acceptance-and-operational-security
-  reason: Strict ZIP central directory, CRC, decompression and zip-bomb controls pass CI for Releases, Actions and repository archives. Live format compatibility, native ChatGPT file delivery and distributed controls remain open.
+  recommended: DEV-010-platform-acceptance
+  reason: Consolidated review and optimized ZIP parsing pass CI. Native ChatGPT attachment semantics, live GitHub App and Coolify tests are blocked until an authorized integration environment exists.
 verification:
   security_retention_tests: passed
   retention_runtime_least_privilege: passed
@@ -32,7 +32,13 @@ verification:
   zip_source_integration_tests: passed_ci
   zip_implementation_revision: 4a5b5aaede25c0a19166d1af6b37b943853b70d3
   zip_github_ci_run: 38915035367
-  evidence_reference: docs/DEV-010-zip-safety.md
+  consolidated_release_review: completed
+  zip_overlap_runtime_improvement: passed_ci
+  zip_ambiguous_prefix_tests: passed_ci
+  consolidated_review_implementation_revision: 97d2381aa9483a69ed84ff43a0adcabd7699622b
+  consolidated_review_ci_run: 38916169686
+  release_decision: blocked_pending_external_acceptance
+  evidence_reference: docs/DEV-010-consolidated-release-review.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
