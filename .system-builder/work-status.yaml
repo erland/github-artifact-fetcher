@@ -1,8 +1,8 @@
 project: github-artifact-fetcher
 phase: create_implementation
 planning_complete: true
-selected_step: null
-in_progress: null
+selected_step: DEV-010
+in_progress: DEV-010
 completed_steps:
   - DEV-001
   - DEV-002
@@ -14,24 +14,26 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010
-  reason: Security controls and negative regression tests are CI verified. DEV-010 must address explicit release blockers before any real deployment or acceptance.
+  recommended: DEV-010-release-acceptance
+  reason: DEV-010 preparations are CI verified, but real ChatGPT native attachments, GitHub live integrations and Coolify deployment acceptance remain unverified by deliberate no-deployment constraint.
 verification:
-  security_regression_tests: passed
-  download_redirect_policy: passed
-  download_bounds_and_content_type: passed
-  server_rate_limits_and_headers: passed
+  explicit_oauth_consent_csrf: passed_ci
+  capped_rate_limiter: passed_ci
+  one_time_binary_links: passed_ci
+  coolify_compose: prepared_not_deployed
   github_ci: passed
   docker_build: passed
-  implementation_revision: ecaf9797d1c5a2c92ebbe7711cc7227b0c9404d7
-  github_ci_run: 38851572456
-  chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-009.md
+  implementation_revision: 5b98568946c823cfcfce9d6e33554f2d16d357ba
+  github_ci_run: 38853694144
+  native_chatgpt_file_attachment: unverified
+  live_github_downloads: unverified
+  coolify_staging: not_deployed
+  evidence_reference: docs/DEV-010-acceptance.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
   live_mcp_oauth: required_before_release
-  oauth_consent_and_registration_abuse: required_before_release
+  live_github_app_callback: required_before_release
   distributed_rate_limit_and_log_retention: required_before_release
   github_app_permissions_and_revocation: required_before_release
   archive_validation: required_before_release
