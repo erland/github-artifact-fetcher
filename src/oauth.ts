@@ -62,8 +62,29 @@ export class OAuth {
    if(q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8||state.length>512)return error(res,400,'invalid_request'),true;
    const user=await this.config.principal(req);
    if(!user)return error(res,401,'login_required'),true;
-   const code=secret();await this.store('code',code,client,user,'mcp',120,redirect,challenge);
-   const target=new URL(redirect);target.searchParams.set('code',code);target.searchParams.set('state',state);
+   // Authorization requires a deliberate same-origin user action. GET never issues a grant.
+   const nonce=secret();
+   const escapeHtml=(v:string)=>v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
+   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; form-action 'self'; base-uri 'none'",'set-cookie':`ghaf_consent=${nonce}; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=300`});
+   res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Authorize MCP</title></head><body><h1>Authorize GitHub Artifact Fetcher</h1><p>Allow client ${escapeHtml(client)} to access your GitHub artifacts through MCP?</p><p>Redirect: ${escapeHtml(redirect)}</p><form action="/authorize" method="post"><input type="hidden" name="csrf" value="${nonce}">${Array.from(q.entries()).map(([k,v])=>`<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join('')}<button type="submit" name="decision" value="approve">Approve</button><button type="submit" name="decision" value="deny">Deny</button></form></body></html>`);return true;
+  }
+  if(req.method==='POST'&&path==='/authorize'){
+   let q:URLSearchParams;try{q=await form(req);}catch{return error(res,400,'invalid_request'),true;}
+   const cookies=(req.headers.cookie??'').split(';').map(x=>x.trim());
+   const nonce=cookies.find(x=>x.startsWith('ghaf_consent='))?.slice('ghaf_consent='.length);
+   res.setHeader('set-cookie','ghaf_consent=; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=0');
+   if(!nonce||!/^[A-Za-z0-9_-]{43}$/.test(nonce)||!secureEqual(nonce,q.get('csrf')??''))return error(res,403,'invalid_consent'),true;
+   const client=q.get('client_id')??'',redirect=q.get('redirect_uri')??'',challenge=q.get('code_challenge')??'',state=q.get('state')??'';
+   if(!await this.client(client,redirect)||q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8||state.length>512)return error(res,400,'invalid_request'),true;
+   const user=await this.config.principal(req);
+   if(!user)return error(res,401,'login_required'),true;
+   const target=new URL(redirect);
+   if(q.get('decision')!=='approve'){
+    target.searchParams.set('error','access_denied');target.searchParams.set('state',state);
+   }else{
+    const code=secret();await this.store('code',code,client,user,'mcp',120,redirect,challenge);
+    target.searchParams.set('code',code);target.searchParams.set('state',state);
+   }
    res.writeHead(302,{'location':target.toString(),'cache-control':'no-store'});res.end();return true;
   }
   if(req.method==='POST'&&path==='/token'){
