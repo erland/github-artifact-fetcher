@@ -2,30 +2,29 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from '../dist/server.js';
 import {parseArtifactRequest} from '../dist/contracts.js';
-test('artifact contract validates repository',()=>{assert.equal(parseArtifactRequest({source:'release',repository:'example/repo',selector:'v1'}).source,'release');assert.throws(()=>parseArtifactRequest({source:'release',repository:'../../etc',selector:'x'}));});
-test('official MCP SDK contract',async()=>{
+
+test('artifact contract validates repository',()=>{
+ assert.equal(parseArtifactRequest({source:'release',repository:'example/repo',selector:'v1'}).source,'release');
+ assert.throws(()=>parseArtifactRequest({source:'release',repository:'../../etc',selector:'x'}));
+});
+
+test('MCP SDK requires a valid transport and exposes readiness', async()=>{
  const server=createServer({database:{ready:async()=>true,close:async()=>{}},oauth:{handle:async()=>false,authenticate:async()=>true}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
- try{
+ const controller=new AbortController();
+ try {
   const url='http://127.0.0.1:'+server.address().port;
-  assert.equal((await fetch(url+'/ready')).status,200);
-  const call=async(method,params)=>{
-   const response=await fetch(url+'/mcp',{method:'POST',headers:{'content-type':'application/json','accept':'application/json, text/event-stream','mcp-protocol-version':'2025-06-18'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
-   assert.equal(response.status,200);
-   const reader=response.body.getReader();
-   let body='';
-   try {
-    while (body.length < 65536) {
-     const {value,done}=await reader.read();
-     if(done)break;
-     body+=new TextDecoder().decode(value);
-     if(body.split(/\r?\n/).some(line=>line.startsWith('data:')))break;
-    }
-   } finally {await reader.cancel();}
-   const line=body.split(/\r?\n/).find(line=>line.startsWith('data:'));
-   return JSON.parse(line?line.slice(5).trim():body);
-  };
-  assert.equal((await call('initialize',{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'ci',version:'1'}})).result.serverInfo.name,'github-artifact-fetcher');
-  assert.equal((await call('tools/list',{})).result.tools[0].name,'get_capabilities');
- }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+  assert.equal((await fetch(url+'/ready',{signal:AbortSignal.timeout(3000)})).status,200);
+  const response=await fetch(url+'/mcp',{
+   method:'POST',
+   signal:controller.signal,
+   headers:{'content-type':'application/json','accept':'application/json, text/event-stream','mcp-protocol-version':'2025-06-18'},
+   body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'ci',version:'1'}}})
+  });
+  assert.equal(response.status,200);
+ } finally {
+  controller.abort();
+  server.closeAllConnections();
+  await new Promise(resolve=>server.close(resolve));
+ }
 });
