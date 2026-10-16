@@ -30,6 +30,10 @@ export function validateZip(buf:Buffer):{entries:number;uncompressedBytes:number
   if(expanded.length!==raw||crc32(expanded)!==crc)invalid();
   ranges.push([local,start+compressed]);cursor+=46+n+extra+comment;
  }
- if(cursor!==eocd||ranges.some(([a,b],i)=>ranges.some(([c,d],j)=>i!==j&&a<d&&c<b)))invalid();
+ if(cursor!==eocd)invalid();
+ ranges.sort((a,b)=>a[0]-b[0]);
+ for(let i=1;i<ranges.length;i++)if(ranges[i][0]<ranges[i-1][1])invalid();
+ if(ranges.length&&ranges[0][0]!==0)invalid();
+ if(ranges.length&&ranges[ranges.length-1][1]!==offset)invalid();
  return {entries,uncompressedBytes:total};
 }
