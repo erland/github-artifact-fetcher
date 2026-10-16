@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {ActionsArtifacts} from '../dist/actions-artifacts.js';
-const zip=Buffer.from([0x50,0x4b,3,4,0,0,0,0,0,0]);
+const zip=Buffer.from('504b0506'+'00'.repeat(18),'hex');
 const identity={repositoryAllowed:async(user,owner,repo)=>user==='github:1'&&owner==='demo'&&repo==='repo',tokenFor:async()=> 'private-gh-token'};
 function service(opts={}){
  let bearerCalls=0;
