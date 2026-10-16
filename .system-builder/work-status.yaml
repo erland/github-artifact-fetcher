@@ -14,21 +14,20 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-remaining-acceptance
-  reason: HMAC-verified installation webhooks, replay tracking, isolated revocation and permanent refresh denial pass CI. Live integration and native ChatGPT attachments remain unverified.
+  recommended: DEV-010-remaining-security-and-acceptance
+  reason: Bounded expired-data cleanup and 30-day webhook replay ledger retention pass CI; external file acceptance, archive safety and distributed limits are still open.
 verification:
-  github_webhook_signature_tests: passed
-  github_webhook_installation_revocation: passed
-  github_refresh_denial_isolation: passed
-  flyway_v6: passed
+  security_retention_tests: passed
+  retention_runtime_least_privilege: passed
+  flyway_v7: passed
   github_ci: passed
   docker_build: passed
-  implementation_revision: 3af1aa0253e200f0ced12f6c07b41e987b7c38a8
-  github_ci_run: 38890957170
+  implementation_revision: 17078be4ecc1e9aa27c0fba74b1340e57229e504
+  github_ci_run: 38900383039
   native_chatgpt_file_attachment: unverified
   live_github_webhook: unverified
   coolify_staging: not_deployed
-  evidence_reference: docs/DEV-010-webhook-revocation.md
+  evidence_reference: docs/DEV-010-security-retention.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
