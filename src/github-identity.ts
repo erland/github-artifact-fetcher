@@ -87,11 +87,46 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
    await client.query('COMMIT');return rotated.access_token;
   }catch{await client.query('ROLLBACK');return null;}finally{client.release();}
  }
+ async revokeLocal(user:string):Promise<void>{
+  const db=await this.config.pool.connect();
+  try{
+   await db.query('BEGIN');
+   await db.query('DELETE FROM github_connections WHERE user_subject=$1',[user]);
+   await db.query('DELETE FROM oauth_sessions WHERE user_subject=$1',[user]);
+   await db.query('UPDATE mcp_oauth_grants SET consumed_at=NOW() WHERE user_subject=$1 AND consumed_at IS NULL',[user]);
+   await db.query('UPDATE mcp_oauth_consent_requests SET consumed_at=NOW() WHERE user_subject=$1 AND consumed_at IS NULL',[user]);
+   await db.query('COMMIT');
+  }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
+ }
  async repositoryAllowed(user:string,owner:string,repo:string):Promise<boolean>{
-  if(!/^[\w.-]{1,100}$/.test(owner)||!/^[\w.-]{1,100}$/.test(repo))return false;
+  if(!/^[\\w.-]{1,100}$/.test(owner)||!/^[\\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
   const token=await this.tokenFor(user);if(!token)return false;
-  const r=await this.fetcher('https://api.github.com/repos/'+encodeURIComponent(owner)+'/'+encodeURIComponent(repo),{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'}});
-  return r.ok;
+  const headers={authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'};
+  const get=async(url:string)=>{
+   const response=await this.fetcher(url,{headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
+   if(response.status===401){await this.revokeLocal(user);return null;}
+   if(!response.ok||response.status>=300)return null;
+   return response.json() as Promise<any>;
+  };
+  const repository=await get('https://api.github.com/repos/'+encodeURIComponent(owner)+'/'+encodeURIComponent(repo));
+  if(!repository||!Number.isSafeInteger(repository.id)||repository.id<=0||typeof repository.full_name!=='string'||repository.full_name.toLowerCase()!==(owner+'/'+repo).toLowerCase())return false;
+  // User access alone is insufficient: the GitHub App must be installed with
+  // explicit read permissions on this precise repository.
+  for(let page=1;page<=10;page++){
+   const data=await get('https://api.github.com/user/installations?per_page=100&page='+page);
+   if(!data||!Array.isArray(data.installations))return false;
+   for(const install of data.installations){
+    if(!Number.isSafeInteger(install.id)||install.id<=0||install.suspended_at||install.permissions?.contents!=='read'&&install.permissions?.contents!=='write')continue;
+    for(let rp=1;rp<=10;rp++){
+     const list=await get('https://api.github.com/user/installations/'+install.id+'/repositories?per_page=100&page='+rp);
+     if(!list||!Array.isArray(list.repositories))return false;
+     if(list.repositories.some((entry:any)=>entry.id===repository.id&&entry.full_name?.toLowerCase()===repository.full_name.toLowerCase()&&entry.permissions?.pull===true))return true;
+     if(list.repositories.length<100)break;
+    }
+   }
+   if(data.installations.length<100)break;
+  }
+  return false;
  }
  async route(req:IncomingMessage,res:ServerResponse,url:URL):Promise<boolean>{
   if(req.method==='GET'&&url.pathname==='/auth/github/start'){await this.start(res);return true;}
