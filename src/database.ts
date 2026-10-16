@@ -12,7 +12,7 @@ export function databaseConfig(env:NodeJS.ProcessEnv=process.env):PoolConfig {
  throw Error('MISSING_DATABASE_CONFIG');
 }
 export function createDatabaseProbe(config:PoolConfig|string):DatabaseProbe {
- const pool=new Pool({...typeof config==='string'?{connectionString:config}:config,max:3,connectionTimeoutMillis:3000});
+ const pool=new Pool({...(typeof config==='string'?{connectionString:config}:config),max:3,connectionTimeoutMillis:3000});
  return {
   async ready() {
    try {
