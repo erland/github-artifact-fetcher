@@ -14,8 +14,8 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-github-app-permissions
-  reason: OAuth registration allowlist and client-scoped token revocation pass CI. Next harden installation-permission and GitHub revocation handling before external acceptance.
+  recommended: DEV-010-remaining-release-gates
+  reason: GitHub App installation and per-repository permissions, GitHub 401 revocation and user isolation pass CI. Live GitHub App acceptance, webhook revocation and native ChatGPT file handoff remain open.
 verification:
   oauth_registration_allowlist: passed
   oauth_token_revocation: passed
@@ -27,7 +27,11 @@ verification:
   native_chatgpt_file_attachment: unverified
   live_github_downloads: unverified
   coolify_staging: not_deployed
-  evidence_reference: docs/DEV-010-registration-revocation.md
+  github_app_permission_tests: passed
+  github_401_isolation_tests: passed
+  github_app_permission_ci_run: 38890327674
+  github_app_permission_implementation_revision: 4018e025b4cbad7b3d75e95919bbcf2812a05fc8
+  evidence_reference: docs/DEV-010-github-app-permissions.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
