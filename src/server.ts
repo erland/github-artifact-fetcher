@@ -1,3 +1,4 @@
+import {FixedWindowLimiter,securityHeaders,audit,requestId} from './security.js';
 /** MCP transport and PostgreSQL readiness. GitHub fetching is deferred until DEV-006. */
 import http from 'node:http';
 import {createMcpHandler, McpServer} from '@modelcontextprotocol/server';
@@ -12,7 +13,7 @@ import {RepositoryArchives} from './repository-archives.js';
 import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined){
  const handler=createMcpHandler(()=>{
-  const server=new McpServer({name:'github-artifact-fetcher',version:'0.8.0-dev008'},{capabilities:{tools:{}}});
+  const server=new McpServer({name:'github-artifact-fetcher',version:'0.9.0-dev009'},{capabilities:{tools:{}}});
   server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:!!identity,packages:false,liveChatGptHandoff:false})}]}));
   if(identity){
    const releases=new ReleaseService(identity);
@@ -30,10 +31,15 @@ function mcpHandler(user:string,identity:GitHubIdentity|undefined){
 }
 function json(res:http.ServerResponse,status:number,data:unknown){res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));}
 export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;identity?:GitHubIdentity}={}){
+ const limiter=new FixedWindowLimiter(120,60_000);
  const identity=options.identity??(process.env.DATABASE_URL&&process.env.PUBLIC_BASE_URL&&process.env.GITHUB_APP_CLIENT_ID&&process.env.GITHUB_APP_CLIENT_SECRET&&process.env.ENCRYPTION_KEY?new GitHubIdentity({pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),clientId:process.env.GITHUB_APP_CLIENT_ID,clientSecret:process.env.GITHUB_APP_CLIENT_SECRET,publicBaseUrl:process.env.PUBLIC_BASE_URL,encryptionKey:Buffer.from(process.env.ENCRYPTION_KEY,'base64')}):undefined);
  const oauth=options.oauth??(process.env.DATABASE_URL&&process.env.PUBLIC_BASE_URL?new OAuth({issuer:process.env.PUBLIC_BASE_URL,pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),principal:identity?req=>identity.principal(req):async()=>null}):undefined);
  const database=options.database??(process.env.DATABASE_URL?createDatabaseProbe(process.env.DATABASE_URL):undefined);
  return http.createServer(async(req,res)=>{
+  securityHeaders(res);
+  const rid=requestId(req);res.setHeader('x-request-id',rid);
+  const remote=req.socket.remoteAddress??'unknown';
+  if(!limiter.allow(remote)){audit('request',rid,'rate_limited');return json(res,429,{error:'RATE_LIMITED'});}
   const path=new URL(req.url??'/','http://localhost').pathname;
   if(req.method==='GET'&&path==='/health')return json(res,200,{status:'ok',version:'0.3.0-dev003'});
   if(req.method==='GET'&&path==='/ready'){
@@ -47,9 +53,10 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
   if(path!=='/mcp')return json(res,404,{error:'NOT_FOUND'});
   const subject=oauth?await oauth.subject(req):null;
   if(!subject){
+   audit('mcp',rid,'unauthorized');
    res.writeHead(401,{'content-type':'application/json','WWW-Authenticate':`Bearer resource_metadata="${oauth?.issuer??'https://localhost'}/.well-known/oauth-protected-resource/mcp"`});res.end(JSON.stringify({error:'unauthorized'}));return;
   }
-  try{await mcpHandler(subject,identity)(req,res);}catch{if(!res.headersSent)json(res,500,{error:'MCP_REQUEST_FAILED'});else res.end();}
+  try{await mcpHandler(subject,identity)(req,res);audit('mcp',rid,'completed');}catch{audit('mcp',rid,'failed');if(!res.headersSent)json(res,500,{error:'MCP_REQUEST_FAILED'});else res.end();}
  });
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
