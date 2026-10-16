@@ -62,30 +62,47 @@ export class OAuth {
    if(q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8||state.length>512)return error(res,400,'invalid_request'),true;
    const user=await this.config.principal(req);
    if(!user)return error(res,401,'login_required'),true;
-   // Authorization requires a deliberate same-origin user action. GET never issues a grant.
-   const nonce=secret();
+   // Bind consent to the exact reviewed request and the logged-in subject.
+   const request=secret(),csrf=secret();
+   await this.config.pool.query(`INSERT INTO mcp_oauth_consent_requests
+    (request_hash,csrf_hash,user_subject,client_id,redirect_uri,state,code_challenge,scope,resource,expires_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [hash(request),hash(csrf),user,client,redirect,state,challenge,'mcp',this.resource,new Date(this.now()+300000)]);
    const escapeHtml=(v:string)=>v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
-   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; form-action 'self'; base-uri 'none'",'set-cookie':`ghaf_consent=${nonce}; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=300`});
-   res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Authorize MCP</title></head><body><h1>Authorize GitHub Artifact Fetcher</h1><p>Allow client ${escapeHtml(client)} to access your GitHub artifacts through MCP?</p><p>Redirect: ${escapeHtml(redirect)}</p><form action="/authorize" method="post"><input type="hidden" name="csrf" value="${nonce}">${Array.from(q.entries()).map(([k,v])=>`<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join('')}<button type="submit" name="decision" value="approve">Approve</button><button type="submit" name="decision" value="deny">Deny</button></form></body></html>`);return true;
+   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; form-action 'self'; base-uri 'none'",'set-cookie':`ghaf_consent=${request}; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=300`});
+   res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Authorize MCP</title></head><body><h1>Authorize GitHub Artifact Fetcher</h1><p>Allow client ${escapeHtml(client)} to access your GitHub artifacts through MCP?</p><p>Redirect: ${escapeHtml(redirect)}</p><form action="/authorize" method="post"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="request" value="${request}"><button type="submit" name="decision" value="approve">Approve</button><button type="submit" name="decision" value="deny">Deny</button></form></body></html>`);return true;
   }
   if(req.method==='POST'&&path==='/authorize'){
    let q:URLSearchParams;try{q=await form(req);}catch{return error(res,400,'invalid_request'),true;}
    const cookies=(req.headers.cookie??'').split(';').map(x=>x.trim());
-   const nonce=cookies.find(x=>x.startsWith('ghaf_consent='))?.slice('ghaf_consent='.length);
+   const cookieRequest=cookies.find(x=>x.startsWith('ghaf_consent='))?.slice('ghaf_consent='.length)??'';
    res.setHeader('set-cookie','ghaf_consent=; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=0');
-   if(!nonce||!/^[A-Za-z0-9_-]{43}$/.test(nonce)||!secureEqual(nonce,q.get('csrf')??''))return error(res,403,'invalid_consent'),true;
-   const client=q.get('client_id')??'',redirect=q.get('redirect_uri')??'',challenge=q.get('code_challenge')??'',state=q.get('state')??'';
-   if(!await this.client(client,redirect)||q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8||state.length>512)return error(res,400,'invalid_request'),true;
+   const supplied=q.get('request')??'',csrf=q.get('csrf')??'';
+   if(!/^[A-Za-z0-9_-]{43}$/.test(cookieRequest)||!secureEqual(cookieRequest,supplied)||!/^[A-Za-z0-9_-]{43}$/.test(csrf)||!['approve','deny'].includes(q.get('decision')??''))return error(res,403,'invalid_consent'),true;
    const user=await this.config.principal(req);
    if(!user)return error(res,401,'login_required'),true;
-   const target=new URL(redirect);
-   if(q.get('decision')!=='approve'){
-    target.searchParams.set('error','access_denied');target.searchParams.set('state',state);
-   }else{
-    const code=secret();await this.store('code',code,client,user,'mcp',120,redirect,challenge);
-    target.searchParams.set('code',code);target.searchParams.set('state',state);
-   }
-   res.writeHead(302,{'location':target.toString(),'cache-control':'no-store'});res.end();return true;
+   const db=await this.config.pool.connect();
+   try {
+    await db.query('BEGIN');
+    const result=await db.query('SELECT * FROM mcp_oauth_consent_requests WHERE request_hash=$1 FOR UPDATE',[hash(cookieRequest)]);
+    const reviewed=result.rows[0];
+    if(result.rowCount!==1||reviewed.consumed_at||new Date(reviewed.expires_at).getTime()<=this.now()||reviewed.user_subject!==user||!secureEqual(reviewed.csrf_hash,hash(csrf)))throw Error('invalid_consent');
+    const updated=await db.query('UPDATE mcp_oauth_consent_requests SET consumed_at=NOW() WHERE request_hash=$1 AND consumed_at IS NULL RETURNING request_hash',[hash(cookieRequest)]);
+    if(updated.rowCount!==1)throw Error('invalid_consent');
+    // All protocol parameters are taken only from the server-side reviewed request.
+    const target=new URL(reviewed.redirect_uri);
+    if(q.get('decision')==='approve'){
+     const code=secret();
+     await db.query('INSERT INTO mcp_oauth_grants(grant_hash,kind,client_id,user_subject,scope,resource,redirect_uri,code_challenge,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [hash(code),'code',reviewed.client_id,user,reviewed.scope,reviewed.resource,reviewed.redirect_uri,reviewed.code_challenge,new Date(this.now()+120000)]);
+     target.searchParams.set('code',code);
+    }else target.searchParams.set('error','access_denied');
+    target.searchParams.set('state',reviewed.state);
+    await db.query('COMMIT');
+    res.writeHead(302,{'location':target.toString(),'cache-control':'no-store'});res.end();
+   }catch{await db.query('ROLLBACK');error(res,403,'invalid_consent');}
+   finally{db.release();}
+   return true;
   }
   if(req.method==='POST'&&path==='/token'){
    let q:URLSearchParams;try{q=await form(req);}catch{return error(res,400,'invalid_request'),true;}
