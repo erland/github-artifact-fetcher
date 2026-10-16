@@ -13,7 +13,7 @@ async function form(req:IncomingMessage):Promise<URLSearchParams>{
  let text='';for await(const chunk of req){text+=chunk;if(text.length>16384)throw Error('too_large');}
  return new URLSearchParams(text);
 }
-function validRedirect(raw:string):boolean{
+export function validRedirect(raw:string):boolean{
  try {const u=new URL(raw);return !u.username&&!u.password&&!u.hash&&
  (u.protocol==='https:'||(u.protocol==='http:'&&(['127.0.0.1','[::1]','localhost'].includes(u.hostname))));}
  catch{return false;}
@@ -42,14 +42,15 @@ export class OAuth {
  async handle(req:IncomingMessage,res:ServerResponse,url:URL):Promise<boolean>{
   const path=url.pathname;
   if(req.method==='GET'&&['/.well-known/oauth-authorization-server','/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'].includes(path)){
-   if(path.includes('authorization-server'))json(res,200,{issuer:this.issuer,authorization_endpoint:this.issuer+'/authorize',token_endpoint:this.issuer+'/token',registration_endpoint:this.issuer+'/register',response_types_supported:['code'],grant_types_supported:['authorization_code','refresh_token'],code_challenge_methods_supported:['S256'],token_endpoint_auth_methods_supported:['none'],scopes_supported:['mcp']});
+   if(path.includes('authorization-server'))json(res,200,{issuer:this.issuer,authorization_endpoint:this.issuer+'/authorize',token_endpoint:this.issuer+'/token',registration_endpoint:this.issuer+'/register',revocation_endpoint:this.issuer+'/revoke',response_types_supported:['code'],grant_types_supported:['authorization_code','refresh_token'],code_challenge_methods_supported:['S256'],token_endpoint_auth_methods_supported:['none'],scopes_supported:['mcp']});
    else json(res,200,{resource:this.resource,authorization_servers:[this.issuer],scopes_supported:['mcp']});
    return true;
   }
   if(req.method==='POST'&&path==='/register'){
    try {
     const input=JSON.parse((await (async()=>{let s='';for await(const chunk of req){s+=chunk;if(s.length>16384)throw Error('too_large');}return s;})())) as {redirect_uris?:unknown;token_endpoint_auth_method?:string};
-    if(!Array.isArray(input.redirect_uris)||input.redirect_uris.length<1||input.redirect_uris.length>5||!input.redirect_uris.every(v=>typeof v==='string'&&validRedirect(v))|| (input.token_endpoint_auth_method&&input.token_endpoint_auth_method!=='none'))return error(res,400,'invalid_client_metadata'),true;
+    const allowed=(process.env.OAUTH_ALLOWED_REDIRECT_HOSTS??'').split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
+    if(!Array.isArray(input.redirect_uris)||input.redirect_uris.length<1||input.redirect_uris.length>5||!input.redirect_uris.every(v=>typeof v==='string'&&validRedirect(v)&&allowed.includes(new URL(v).hostname.toLowerCase()))|| (input.token_endpoint_auth_method&&input.token_endpoint_auth_method!=='none'))return error(res,400,'invalid_client_metadata'),true;
     const id=secret();await this.config.pool.query('INSERT INTO mcp_oauth_clients(client_id,redirect_uris) VALUES($1,$2)',[id,JSON.stringify(input.redirect_uris)]);
     json(res,201,{client_id:id,redirect_uris:input.redirect_uris,token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code']});
    }catch{error(res,400,'invalid_client_metadata');}
@@ -102,6 +103,23 @@ export class OAuth {
     await db.query('COMMIT');
     res.writeHead(302,{'location':target.toString(),'cache-control':'no-store'});res.end();
    }catch{await db.query('ROLLBACK');error(res,403,'invalid_consent');}
+   finally{db.release();}
+   return true;
+  }
+  if(req.method==='POST'&&path==='/revoke'){
+   let q:URLSearchParams;try{q=await form(req);}catch{return error(res,400,'invalid_request'),true;}
+   const token=q.get('token')??'',clientId=q.get('client_id')??'';
+   if(!/^[A-Za-z0-9_-]{43}$/.test(token)||!/^[A-Za-z0-9_-]{43}$/.test(clientId))return error(res,400,'invalid_request'),true;
+   const db=await this.config.pool.connect();
+   try{
+    await db.query('BEGIN');
+    const result=await db.query("SELECT user_subject FROM mcp_oauth_grants WHERE grant_hash=$1 AND client_id=$2 AND kind IN ('access','refresh') FOR UPDATE",[hash(token),clientId]);
+    if(result.rowCount===1){
+     await db.query("UPDATE mcp_oauth_grants SET consumed_at=NOW() WHERE client_id=$1 AND user_subject=$2 AND consumed_at IS NULL",[clientId,result.rows[0].user_subject]);
+    }
+    await db.query('COMMIT');
+    json(res,200,{});
+   }catch{await db.query('ROLLBACK');error(res,500,'server_error');}
    finally{db.release();}
    return true;
   }
