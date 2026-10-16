@@ -1,3 +1,4 @@
+import {validateZip} from './zip-validation.js';
 import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 import type {GitHubCredentials,FileOutput} from './releases.js';
@@ -67,7 +68,7 @@ export class ActionsArtifacts {
    while(true){const {done,value}=await reader.read();if(done)break;const b=Buffer.from(value);total+=b.length;if(total>MAX)throw Error('ARTIFACT_TOO_LARGE');chunks.push(b);}
   }finally{await reader.cancel().catch(()=>{});}
   const bytes=Buffer.concat(chunks);
-  if(!isZip(bytes))throw Error('INVALID_ZIP');
+  validateZip(bytes);
   // GitHub's size_in_bytes is the stored artifact size and is not guaranteed to equal the archive ZIP download size.
   return {filename:metadata.name.replace(/[^A-Za-z0-9_.-]/g,'_')+'.zip',mimeType:'application/zip',sizeBytes:total,sha256:createHash('sha256').update(bytes).digest('hex'),dataBase64:bytes.toString('base64')};
  }
