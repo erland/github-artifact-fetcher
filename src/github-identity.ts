@@ -99,7 +99,7 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
   }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
  }
  async repositoryAllowed(user:string,owner:string,repo:string):Promise<boolean>{
-  if(!/^[\\w.-]{1,100}$/.test(owner)||!/^[\\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
+  if(!/^[\w.-]{1,100}$/.test(owner)||!/^[\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
   const token=await this.tokenFor(user);if(!token)return false;
   const headers={authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'};
   const get=async(url:string)=>{
