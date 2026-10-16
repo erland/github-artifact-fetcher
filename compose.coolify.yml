@@ -1,23 +1,30 @@
-# Prepared for later Coolify deployment; not deployed or tested against Coolify.
-# Coolify should route TLS to app:3000 and only expose the app through its proxy.
+# Prepared for Coolify using a published GHCR application image and external PostgreSQL.
+# Flyway still reads versioned SQL migration files from the Git checkout.
+# Verify the checkout is compatible with the chosen GHAF_IMAGE_TAG before deploying.
+# Coolify should route TLS to app:3000; do not expose port 3000 publicly.
 services:
   migrate:
     image: flyway/flyway:11.18
     command: -connectRetries=30 -locations=filesystem:/flyway/sql migrate
     environment:
-      FLYWAY_URL: ${FLYWAY_JDBC_URL:?required}
-      FLYWAY_USER: ${DATABASE_MIGRATION_USER:?required}
-      FLYWAY_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?required}
+      FLYWAY_URL: jdbc:postgresql://${DB_HOST:?required}:${DB_PORT:-5432}/${DB_NAME:?required}
+      FLYWAY_USER: ${DB_MIGRATION_USER:?required}
+      FLYWAY_PASSWORD: ${DB_MIGRATION_PASSWORD:?required}
     volumes:
       - ./db/migration:/flyway/sql:ro
     restart: "no"
   app:
-    build: .
+    image: ghcr.io/erland/github-artifact-fetcher:${GHAF_IMAGE_TAG:?set GHAF_IMAGE_TAG to a published version such as 0.5.0}
+    pull_policy: always
     restart: unless-stopped
     environment:
       PORT: "3000"
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL:?required}
+      DB_HOST: ${DB_HOST:?required}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:?required}
+      DB_USER: ${DB_USER:?required}
+      DB_PASSWORD: ${DB_PASSWORD:?required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?required}
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?required}
       GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?required}

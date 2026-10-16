@@ -3,7 +3,7 @@ import {FixedWindowLimiter,securityHeaders,audit,requestId} from './security.js'
 import http from 'node:http';
 import {createMcpHandler, McpServer} from '@modelcontextprotocol/server';
 import {toNodeHandler} from '@modelcontextprotocol/node';
-import {createDatabaseProbe, type DatabaseProbe} from './database.js';
+import {createDatabaseProbe, databaseConfig, type DatabaseProbe} from './database.js';
 import {OAuth, type PrincipalResolver} from './oauth.js';
 import {Pool} from 'pg';
 import {GitHubIdentity} from './github-identity.js';
@@ -35,17 +35,20 @@ function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:Ephemera
 function json(res:http.ServerResponse,status:number,data:unknown){res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));}
 export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;identity?:GitHubIdentity}={}){
  const limiter=new FixedWindowLimiter(120,60_000);
- const webhook=process.env.DATABASE_URL&&process.env.GITHUB_WEBHOOK_SECRET?new GitHubWebhooks(new Pool({connectionString:process.env.DATABASE_URL,max:5}),process.env.GITHUB_WEBHOOK_SECRET):undefined;
+ const dbAvailable=!!process.env.DATABASE_URL||['DB_HOST','DB_NAME','DB_USER','DB_PASSWORD'].every(key=>!!process.env[key]);
+ const poolOptions=dbAvailable?databaseConfig():undefined;
+ const webhook=poolOptions&&process.env.GITHUB_WEBHOOK_SECRET?new GitHubWebhooks(new Pool({...poolOptions,max:5}),process.env.GITHUB_WEBHOOK_SECRET):undefined;
  const files=new EphemeralFiles();
  const publicBaseUrl=process.env.PUBLIC_BASE_URL??'https://localhost';
  if(process.env.NODE_ENV==='production'){
   const base=new URL(publicBaseUrl);
   if(base.protocol!=='https:'||base.pathname!=='/'||base.search||base.hash||base.username||base.password)throw Error('INVALID_PUBLIC_BASE_URL');
-  for(const name of ['DATABASE_URL','PUBLIC_BASE_URL','GITHUB_APP_CLIENT_ID','GITHUB_APP_CLIENT_SECRET','GITHUB_WEBHOOK_SECRET','ENCRYPTION_KEY','OAUTH_ALLOWED_REDIRECT_HOSTS'])if(!process.env[name])throw Error('MISSING_CONFIG_'+name);
+  if(!poolOptions)throw Error('MISSING_DATABASE_CONFIG');
+  for(const name of ['PUBLIC_BASE_URL','GITHUB_APP_CLIENT_ID','GITHUB_APP_CLIENT_SECRET','GITHUB_WEBHOOK_SECRET','ENCRYPTION_KEY','OAUTH_ALLOWED_REDIRECT_HOSTS'])if(!process.env[name])throw Error('MISSING_CONFIG_'+name);
  }
- const identity=options.identity??(process.env.DATABASE_URL&&process.env.PUBLIC_BASE_URL&&process.env.GITHUB_APP_CLIENT_ID&&process.env.GITHUB_APP_CLIENT_SECRET&&process.env.ENCRYPTION_KEY?new GitHubIdentity({pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),clientId:process.env.GITHUB_APP_CLIENT_ID,clientSecret:process.env.GITHUB_APP_CLIENT_SECRET,publicBaseUrl:process.env.PUBLIC_BASE_URL,encryptionKey:Buffer.from(process.env.ENCRYPTION_KEY,'base64')}):undefined);
- const oauth=options.oauth??(process.env.DATABASE_URL&&process.env.PUBLIC_BASE_URL?new OAuth({issuer:process.env.PUBLIC_BASE_URL,pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),principal:identity?req=>identity.principal(req):async()=>null}):undefined);
- const database=options.database??(process.env.DATABASE_URL?createDatabaseProbe(process.env.DATABASE_URL):undefined);
+ const identity=options.identity??(poolOptions&&process.env.PUBLIC_BASE_URL&&process.env.GITHUB_APP_CLIENT_ID&&process.env.GITHUB_APP_CLIENT_SECRET&&process.env.ENCRYPTION_KEY?new GitHubIdentity({pool:new Pool({...poolOptions,max:5}),clientId:process.env.GITHUB_APP_CLIENT_ID,clientSecret:process.env.GITHUB_APP_CLIENT_SECRET,publicBaseUrl:process.env.PUBLIC_BASE_URL,encryptionKey:Buffer.from(process.env.ENCRYPTION_KEY,'base64')}):undefined);
+ const oauth=options.oauth??(poolOptions&&process.env.PUBLIC_BASE_URL?new OAuth({issuer:process.env.PUBLIC_BASE_URL,pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),principal:identity?req=>identity.principal(req):async()=>null}):undefined);
+ const database=options.database??(poolOptions?createDatabaseProbe(poolOptions):undefined);
  return http.createServer(async(req,res)=>{
   securityHeaders(res);
   const rid=requestId(req);res.setHeader('x-request-id',rid);
@@ -79,6 +82,6 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
  });
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
- if(!process.env.DATABASE_URL||!process.env.PUBLIC_BASE_URL)throw new Error('DATABASE_URL and PUBLIC_BASE_URL required');
+ if(!process.env.PUBLIC_BASE_URL)throw new Error('PUBLIC_BASE_URL required');
  createServer().listen(Number(process.env.PORT??3000),'0.0.0.0');
 }
