@@ -7,7 +7,7 @@ const digest=createHash('sha256').update(bytes).digest('hex');
 const identity={repositoryAllowed:async(user,owner,repo)=>user==='github:1'&&owner==='example'&&repo==='demo',tokenFor:async()=> 'secret-token'};
 function service(opts={}){
  const fetcher=async(url,init)=>{
-  if(url.endsWith('/releases/tags/v1'))return new Response(JSON.stringify({tag_name:'v1',assets:[{id:77,name:'sample.epub',size:opts.size??bytes.length,content_type:'application/epub+zip',digest:opts.digest??'sha256:'+digest}]}));
+  if(url.endsWith('/releases/tags/v1'))return new Response(JSON.stringify({tag_name:'v1',assets:[{id:77,name:opts.name??'sample.epub',size:opts.size??(opts.payload??bytes).length,content_type:opts.contentType??'application/epub+zip',digest:opts.digest??'sha256:'+createHash('sha256').update(opts.payload??bytes).digest('hex')}]}));
   if(url.endsWith('/releases/assets/77'))return new Response(null,{status:302,headers:{location:opts.redirect??'https://release-assets.githubusercontent.com/download/asset'}});
   if(url.startsWith('https://release-assets.githubusercontent.com/')){
    assert.equal(init.headers?.Authorization,undefined);
@@ -37,4 +37,9 @@ test('reject untrusted redirect and mismatched checksums',async()=>{
 });
 test('reject oversized release metadata',async()=>{
  await assert.rejects(service({size:999999999}).fetch('github:1','example/demo','v1','sample.epub'),/ASSET_TOO_LARGE/);
+});
+
+test('release ZIP rejects invalid central directory even when SHA-256 matches',async()=>{
+ const malformed=Buffer.from([80,75,3,4,0,0,0,0]);
+ await assert.rejects(service({name:'sample.zip',contentType:'application/zip',payload:malformed}).fetch('github:1','example/demo','v1','sample.zip'),/INVALID_ZIP/);
 });
