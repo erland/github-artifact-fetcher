@@ -11,6 +11,7 @@ import {ReleaseService} from './releases.js';
 import {ActionsArtifacts} from './actions-artifacts.js';
 import {RepositoryArchives} from './repository-archives.js';
 import {EphemeralFiles} from './file-delivery.js';
+import {GitHubWebhooks} from './github-webhooks.js';
 import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:EphemeralFiles,publicBaseUrl:string){
  const handler=createMcpHandler(()=>{
@@ -33,6 +34,7 @@ function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:Ephemera
 function json(res:http.ServerResponse,status:number,data:unknown){res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));}
 export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;identity?:GitHubIdentity}={}){
  const limiter=new FixedWindowLimiter(120,60_000);
+ const webhook=process.env.DATABASE_URL&&process.env.GITHUB_WEBHOOK_SECRET?new GitHubWebhooks(new Pool({connectionString:process.env.DATABASE_URL,max:5}),process.env.GITHUB_WEBHOOK_SECRET):undefined;
  const files=new EphemeralFiles();
  const publicBaseUrl=process.env.PUBLIC_BASE_URL??'https://localhost';
  const identity=options.identity??(process.env.DATABASE_URL&&process.env.PUBLIC_BASE_URL&&process.env.GITHUB_APP_CLIENT_ID&&process.env.GITHUB_APP_CLIENT_SECRET&&process.env.ENCRYPTION_KEY?new GitHubIdentity({pool:new Pool({connectionString:process.env.DATABASE_URL,max:5}),clientId:process.env.GITHUB_APP_CLIENT_ID,clientSecret:process.env.GITHUB_APP_CLIENT_SECRET,publicBaseUrl:process.env.PUBLIC_BASE_URL,encryptionKey:Buffer.from(process.env.ENCRYPTION_KEY,'base64')}):undefined);
@@ -44,6 +46,10 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
   const remote=req.socket.remoteAddress??'unknown';
   if(!limiter.allow(remote)){audit('request',rid,'rate_limited');return json(res,429,{error:'RATE_LIMITED'});}
   const path=new URL(req.url??'/','http://localhost').pathname;
+  if(path==='/webhooks/github'&&req.method==='POST'){
+   if(!webhook)return json(res,503,{error:'WEBHOOK_NOT_CONFIGURED'});
+   await webhook.handle(req,res);return;
+  }
   if(req.method==='GET'&&path.startsWith('/downloads/')){
    if(!files.serve(path.slice('/downloads/'.length),res))return json(res,404,{error:'FILE_NOT_FOUND_OR_EXPIRED'});
    return;
