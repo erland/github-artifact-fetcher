@@ -1,3 +1,4 @@
+import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 import type {GitHubCredentials,FileOutput} from './releases.js';
 export type ActionArtifact={id:number;name:string;size_in_bytes:number;expired:boolean;expires_at:string|null;archive_download_url:string;workflow_run?:{id:number}};
@@ -54,14 +55,13 @@ export class ActionsArtifacts {
   if([302,307].includes(response.status)){
    const location=response.headers.get('location');
    if(!location)throw Error('MISSING_REDIRECT');
-   const target=new URL(location);
-   if(target.protocol!=='https:'||target.username||target.password||target.port||!['productionresultssa0.blob.core.windows.net','productionresultssa1.blob.core.windows.net','actions-results-receiver-production.githubapp.com'].includes(target.hostname))throw Error('UNTRUSTED_REDIRECT');
+   const target=new URL(safeDownloadRedirect(location,new Set(['productionresultssa0.blob.core.windows.net','productionresultssa1.blob.core.windows.net','actions-results-receiver-production.githubapp.com'])));
    response=await this.fetcher(target.toString(),{redirect:'manual',signal:AbortSignal.timeout(30000)});
   }
   if(!response.ok||response.status>=300)throw Error('ARTIFACT_DOWNLOAD_HTTP_'+response.status);
   if(!response.body)throw Error('EMPTY_DOWNLOAD');
-  const length=response.headers.get('content-length');
-  if(length!==null&&Number(length)>MAX)throw Error('ARTIFACT_TOO_LARGE');
+  safeContentLength(response.headers.get('content-length'),MAX);
+  safeResponseStatus(response);
   const reader=response.body.getReader(),chunks:Buffer[]=[];let total=0;
   try{
    while(true){const {done,value}=await reader.read();if(done)break;const b=Buffer.from(value);total+=b.length;if(total>MAX)throw Error('ARTIFACT_TOO_LARGE');chunks.push(b);}
