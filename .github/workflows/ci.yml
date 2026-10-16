@@ -59,5 +59,8 @@ jobs:
           ENCRYPTION_KEY: placeholder
           OAUTH_ALLOWED_REDIRECT_HOSTS: client.example.test
           GITHUB_WEBHOOK_SECRET: placeholder
-        run: docker compose -f compose.coolify.yml config -q
+          GHAF_IMAGE_TAG: 0.5.0
+        run: |
+          docker compose -f compose.coolify.yml config -q
+          docker compose -f compose.coolify.yml config --format json | jq -e '.services.app.image == "ghcr.io/erland/github-artifact-fetcher:0.5.0" and (.services.app | has("build") | not) and (.services | has("postgres") | not) and (.services | has("db") | not)'
       - run: docker build -t github-artifact-fetcher:ci .
