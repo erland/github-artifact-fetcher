@@ -23,13 +23,14 @@ export class RepositoryArchives {
   if(!token)throw Error('GITHUB_TOKEN_UNAVAILABLE');
   // Resolve the chosen namespace explicitly. Do not accept an ambiguous bare ref.
   const apiBase=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
-  const lookup=ref.kind==='commit'?ref.value:`${ref.kind==='branch'?'heads':'tags'}/${ref.value}`;
-  const info=await this.fetcher(`${apiBase}/git/ref/${lookup.split('/').map(encodeURIComponent).join('/')}`,{
+  const lookup=ref.kind==='commit'?`git/commits/${encodeURIComponent(ref.value)}`:`git/ref/${[ref.kind==='branch'?'heads':'tags',...ref.value.split('/')].map(encodeURIComponent).join('/')}`;
+  const info=await this.fetcher(`${apiBase}/${lookup}`,{
    headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
   });
   if(!info.ok)throw Error('REF_LOOKUP_HTTP_'+info.status);
-  const metadata=await info.json() as {object?:{sha?:string}};
-  const sha=ref.kind==='commit'?ref.value:metadata.object?.sha;
+  const metadata=await info.json() as {sha?:string;object?:{sha?:string;type?:string}};
+  if(ref.kind==='tag'&&metadata.object?.type==='tag')throw Error('ANNOTATED_TAG_UNSUPPORTED');
+  const sha=ref.kind==='commit'?metadata.sha:metadata.object?.sha;
   if(!sha||!hexCommit.test(sha))throw Error('INVALID_RESOLVED_COMMIT');
   const url=`${apiBase}/zipball/${sha}`;
   let response=await this.fetcher(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
