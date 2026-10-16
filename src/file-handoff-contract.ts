@@ -1,3 +1,4 @@
+import type {EphemeralFiles} from './file-delivery.js';
 import {createHash} from 'node:crypto';
 import type {FileOutput} from './releases.js';
 export type FileFormat='zip'|'pdf'|'epub';
@@ -22,4 +23,9 @@ export function handoffContract(file:FileOutput,staged:{url:string;expiresAt:str
  const u=new URL(staged.url);
  if(u.protocol!=='https:'||u.username||u.password||u.hash)throw Error('INVALID_DOWNLOAD_ORIGIN');
  return {schemaVersion:1,delivery:'one_time_https_url',nativeAttachment:false,filename:file.filename,mimeType:file.mimeType,sizeBytes:file.sizeBytes,sha256:file.sha256,downloadUrl:staged.url,expiresAt:staged.expiresAt};
+}
+
+export function stageHandoff(files:EphemeralFiles,file:FileOutput,baseUrl:string):FileHandoff{
+ verifyFileForDelivery(file);
+ return handoffContract(file,files.stage(file,baseUrl));
 }
