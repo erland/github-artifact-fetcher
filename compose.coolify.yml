@@ -1,6 +1,6 @@
 # Prepared for Coolify using a published GHCR application image and external PostgreSQL.
-# This Compose file must be sourced from the SAME Git release tag as GHAF_IMAGE_TAG,
-# because Flyway reads SQL migrations from the versioned repository checkout.
+# Flyway still reads versioned SQL migration files from the Git checkout.
+# Verify the checkout is compatible with the chosen GHAF_IMAGE_TAG before deploying.
 # Coolify should route TLS to app:3000; do not expose port 3000 publicly.
 services:
   migrate:
