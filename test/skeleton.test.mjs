@@ -9,7 +9,7 @@ test('artifact contract validates repository',()=>{
 });
 
 test('MCP SDK requires a valid transport and exposes readiness', async()=>{
- const server=createServer({database:{ready:async()=>true,close:async()=>{}},oauth:{handle:async()=>false,authenticate:async()=>true}});
+ const server=createServer({database:{ready:async()=>true,close:async()=>{}},oauth:{issuer:'https://artifact.example.test',handle:async()=>false,authenticate:async()=>true}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const controller=new AbortController();
  try {
