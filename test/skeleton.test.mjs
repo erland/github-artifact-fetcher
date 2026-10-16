@@ -12,11 +12,20 @@ test('official MCP SDK contract',async()=>{
   const call=async(method,params)=>{
    const response=await fetch(url+'/mcp',{method:'POST',headers:{'content-type':'application/json','accept':'application/json, text/event-stream','mcp-protocol-version':'2025-06-18'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
    assert.equal(response.status,200);
-   const body=await response.text();
+   const reader=response.body.getReader();
+   let body='';
+   try {
+    while (body.length < 65536) {
+     const {value,done}=await reader.read();
+     if(done)break;
+     body+=new TextDecoder().decode(value);
+     if(body.split(/\r?\n/).some(line=>line.startsWith('data:')))break;
+    }
+   } finally {await reader.cancel();}
    const line=body.split(/\r?\n/).find(line=>line.startsWith('data:'));
    return JSON.parse(line?line.slice(5).trim():body);
   };
   assert.equal((await call('initialize',{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'ci',version:'1'}})).result.serverInfo.name,'github-artifact-fetcher');
   assert.equal((await call('tools/list',{})).result.tools[0].name,'get_capabilities');
- }finally{await new Promise(resolve=>server.close(resolve));}
+ }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
