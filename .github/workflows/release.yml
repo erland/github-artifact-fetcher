@@ -19,6 +19,16 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
@@ -60,7 +70,21 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --no-audit --no-fund
-      - run: npm run build
+      - name: Provision test DB and roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "CREATE USER github_artifact_fetcher_app PASSWORD 'runtime_test';"
+          psql -h localhost -U postgres -c "CREATE USER github_artifact_fetcher_migrator PASSWORD 'migrate_test';"
+          psql -h localhost -U postgres -c "CREATE DATABASE github_artifact_fetcher OWNER github_artifact_fetcher_migrator;"
+          psql -h localhost -U postgres -d github_artifact_fetcher -c "GRANT CONNECT ON DATABASE github_artifact_fetcher TO github_artifact_fetcher_app;"
+          psql -h localhost -U postgres -d github_artifact_fetcher -c "GRANT USAGE ON SCHEMA public TO github_artifact_fetcher_app;"
+      - name: Run Flyway migrations
+        run: docker run --rm --network host -v "$PWD/db/migration:/flyway/sql:ro" flyway/flyway:11.18 -url=jdbc:postgresql://localhost:5432/github_artifact_fetcher -user=github_artifact_fetcher_migrator -password=migrate_test -locations=filesystem:/flyway/sql migrate
+      - name: Verify source and tests
+        run: timeout 90s npm run verify
+        env:
+          TEST_DATABASE_URL: postgres://github_artifact_fetcher_app:runtime_test@localhost:5432/github_artifact_fetcher
       - name: Verify multi-arch Dockerfile can build
         run: docker build -t github-artifact-fetcher:verification .
   publish:
