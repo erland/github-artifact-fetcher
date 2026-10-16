@@ -15,7 +15,9 @@ test('GitHub App OAuth state, encrypted tokens, refresh rotation and repository 
    return new Response(JSON.stringify({access_token:'original-access',refresh_token:'original-refresh',expires_in:1,refresh_token_expires_in:15552000}),{status:200});
   }
   if(url.endsWith('/user'))return new Response(JSON.stringify({id:123456}),{status:200});
-  if(url.includes('/repos/')){repoCalls++;return new Response('{}',{status:url.endsWith('/allowed')?200:404});}
+  if(url.includes('/user/installations/1/repositories'))return new Response(JSON.stringify({repositories:[{id:900,full_name:'erland/allowed',permissions:{pull:true}}]}));
+  if(url.includes('/user/installations?'))return new Response(JSON.stringify({installations:[{id:1,suspended_at:null,permissions:{contents:'read'}}]}));
+  if(url.includes('/repos/')){repoCalls++;return new Response(JSON.stringify({id:900,full_name:'erland/allowed'}),{status:url.endsWith('/allowed')?200:404});}
   throw Error('unrecognized mock');
  };
  const identity=new GitHubIdentity({...config,pool,fetcher});
@@ -42,6 +44,7 @@ test('GitHub App OAuth state, encrypted tokens, refresh rotation and repository 
   assert.equal(await identity.repositoryAllowed('github:123456','erland','denied'),false);
   assert.equal(refreshed,1);assert.equal(repoCalls,2);
   assert.equal(await identity.repositoryAllowed('github:123456','../evil','allowed'),false);
+  assert.equal(await identity.repositoryAllowed('github:other','erland','allowed'),false);
   assert.equal(await identity.tokenFor('nonexistent'),null);
   const replay=await fetch(base+'/auth/github/callback?code=abc&state='+encodeURIComponent(state),{headers:{cookie},redirect:'manual'});
   assert.equal(replay.status,400);
