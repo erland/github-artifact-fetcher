@@ -12,26 +12,27 @@ completed_steps:
   - DEV-006
   - DEV-007
   - DEV-008
+  - DEV-009
 next:
-  recommended: DEV-009
-  reason: Repository ZIP with explicit branch/tag/commit, permissions, bounded stream, redirect controls, CI and Docker verified; harden and validate security next.
+  recommended: DEV-010
+  reason: Security controls and negative regression tests are CI verified. DEV-010 must address explicit release blockers before any real deployment or acceptance.
 verification:
-  repository_archive_tests: passed
-  explicit_git_ref_resolution: passed
-  redirect_and_permission_tests: passed
+  security_regression_tests: passed
+  download_redirect_policy: passed
+  download_bounds_and_content_type: passed
+  server_rate_limits_and_headers: passed
   github_ci: passed
   docker_build: passed
-  implementation_revision: e8078cda14a897f2ce97389d073d32ef596993ed
-  github_ci_run: 38850900778
-  live_github_archive_download: deferred_external_acceptance
+  implementation_revision: ecaf9797d1c5a2c92ebbe7711cc7227b0c9404d7
+  github_ci_run: 38851572456
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-008.md
+  evidence_reference: docs/DEV-009.md
 release_gates:
   chatgpt_file_handoff: required_before_release
-  live_github_archive_download: required_before_release
-  live_github_actions_download: required_before_release
-  live_github_asset_download: required_before_release
+  live_github_downloads: required_before_release
   live_mcp_oauth: required_before_release
-  live_github_app_callback: required_before_release
-  public_oauth_security_hardening: required_before_release
+  oauth_consent_and_registration_abuse: required_before_release
+  distributed_rate_limit_and_log_retention: required_before_release
+  github_app_permissions_and_revocation: required_before_release
+  archive_validation: required_before_release
   production_compose_startup: required_before_release
