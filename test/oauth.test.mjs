@@ -27,8 +27,16 @@ test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial',
   const authorize=new URL(base+'/authorize');
   for(const [k,v] of Object.entries({client_id,redirect_uri:redirect,response_type:'code',code_challenge_method:'S256',code_challenge:challenge,scope:'mcp',resource:issuer+'/mcp',state:'teststate123'}))authorize.searchParams.set(k,v);
   const authResponse=await fetch(authorize,{redirect:'manual'});
-  assert.equal(authResponse.status,302);
-  const callback=new URL(authResponse.headers.get('location'));
+  assert.equal(authResponse.status,200);
+  const consentCookie=authResponse.headers.get('set-cookie').split(';')[0];
+  const csrf=consentCookie.split('=')[1];
+  const fields=new URLSearchParams(authorize.searchParams);
+  fields.set('csrf',csrf);fields.set('decision','approve');
+  const denied=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:fields});
+  assert.equal(denied.status,403);
+  const approved=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',cookie:consentCookie},body:fields,redirect:'manual'});
+  assert.equal(approved.status,302);
+  const callback=new URL(approved.headers.get('location'));
   assert.equal(callback.searchParams.get('state'),'teststate123');
   const code=callback.searchParams.get('code');
   const exchange=async(verifierValue)=>fetch(base+'/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id,code,redirect_uri:redirect,code_verifier:verifierValue})});
