@@ -1,0 +1,137 @@
+name: Publish Docker image
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing published GitHub release tag (e.g. v0.5.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghcr-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Resolve published release and immutable source commit
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo 'Invalid semver release tag'; exit 1; }
+          release=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          test "$(jq -r '.draft' <<< "$release")" = false
+          test -n "$(jq -r '.published_at // empty' <<< "$release")"
+          prerelease=$(jq -r '.prerelease' <<< "$release")
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')
+          object_type=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.type')
+          if [ "$object_type" = tag ]; then
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${sha}" --jq '.object.sha')
+          fi
+          [[ "$sha" =~ ^[a-f0-9]{40}$ ]] || exit 1
+          if [ "${{ github.event_name }}" = release ]; then
+            test "${{ github.event.release.id }}" = "$(jq -r '.id' <<< "$release")"
+          fi
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "version=${RELEASE_TAG#v}"
+            echo "prerelease=$prerelease"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Provision test DB and roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "CREATE USER github_artifact_fetcher_app PASSWORD 'runtime_test';"
+          psql -h localhost -U postgres -c "CREATE USER github_artifact_fetcher_migrator PASSWORD 'migrate_test';"
+          psql -h localhost -U postgres -c "CREATE DATABASE github_artifact_fetcher OWNER github_artifact_fetcher_migrator;"
+          psql -h localhost -U postgres -d github_artifact_fetcher -c "GRANT CONNECT ON DATABASE github_artifact_fetcher TO github_artifact_fetcher_app;"
+          psql -h localhost -U postgres -d github_artifact_fetcher -c "GRANT USAGE ON SCHEMA public TO github_artifact_fetcher_app;"
+      - name: Run Flyway migrations
+        run: docker run --rm --network host -v "$PWD/db/migration:/flyway/sql:ro" flyway/flyway:11.18 -url=jdbc:postgresql://localhost:5432/github_artifact_fetcher -user=github_artifact_fetcher_migrator -password=migrate_test -locations=filesystem:/flyway/sql migrate
+      - name: Verify source and tests
+        run: timeout 90s npm run verify
+        env:
+          TEST_DATABASE_URL: postgres://github_artifact_fetcher_app:runtime_test@localhost:5432/github_artifact_fetcher
+      - name: Verify multi-arch Dockerfile can build
+        run: docker build -t github-artifact-fetcher:verification .
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build immutable version tags
+        id: tags
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          REF_SHA: ${{ needs.verify.outputs.sha }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            echo 'tags<<EOF'
+            echo "$image:$VERSION"
+            echo "$image:v$VERSION"
+            echo "$image:sha-${REF_SHA:0:12}"
+            if [ "$PRERELEASE" = false ]; then echo "$image:latest"; fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Build and publish linux/amd64 and linux/arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+          provenance: mode=min
