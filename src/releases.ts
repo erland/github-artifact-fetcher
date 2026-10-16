@@ -52,12 +52,17 @@ export class ReleaseService {
   if(Number.isFinite(declared)&&declared>assetLimit)throw Error('ASSET_TOO_LARGE');
   if(!response.body)throw Error('EMPTY_DOWNLOAD');
   const chunks:Buffer[]=[];let total=0;
-  for await(const part of response.body){
-   const chunk=Buffer.from(part);
-   total+=chunk.length;
-   if(total>assetLimit){await response.body.cancel().catch(()=>{});throw Error('ASSET_TOO_LARGE');}
-   chunks.push(chunk);
-  }
+  const reader=response.body.getReader();
+  try {
+   while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    const chunk=Buffer.from(value);
+    total+=chunk.length;
+    if(total>assetLimit)throw Error('ASSET_TOO_LARGE');
+    chunks.push(chunk);
+   }
+  } finally {reader.releaseLock();}
   const bytes=Buffer.concat(chunks),digest=createHash('sha256').update(bytes).digest('hex');
   if(total!==asset.size)throw Error('SIZE_MISMATCH');
   if(asset.digest){
