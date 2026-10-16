@@ -1,0 +1,4 @@
+CREATE INDEX github_webhook_deliveries_retention_idx ON github_webhook_deliveries(received_at);
+CREATE INDEX oauth_sessions_retention_idx ON oauth_sessions(expires_at);
+CREATE INDEX github_oauth_attempts_retention_idx ON github_oauth_attempts(expires_at);
+CREATE INDEX mcp_oauth_consent_retention_idx ON mcp_oauth_consent_requests(expires_at);
