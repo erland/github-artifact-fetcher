@@ -29,8 +29,18 @@ export class RepositoryArchives {
   });
   if(!info.ok)throw Error('REF_LOOKUP_HTTP_'+info.status);
   const metadata=await info.json() as {sha?:string;object?:{sha?:string;type?:string}};
-  if(ref.kind==='tag'&&metadata.object?.type==='tag')throw Error('ANNOTATED_TAG_UNSUPPORTED');
-  const sha=ref.kind==='commit'?metadata.sha:metadata.object?.sha;
+  let sha=ref.kind==='commit'?metadata.sha:metadata.object?.sha;
+  if(ref.kind==='tag'&&metadata.object?.type==='tag'){
+   const tagSha=metadata.object.sha;
+   if(!tagSha||!hexCommit.test(tagSha))throw Error('INVALID_RESOLVED_TAG');
+   const tagResponse=await this.fetcher(`${apiBase}/git/tags/${tagSha}`,{
+    headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
+   });
+   if(!tagResponse.ok)throw Error('TAG_LOOKUP_HTTP_'+tagResponse.status);
+   const tag=await tagResponse.json() as {object?:{sha?:string;type?:string}};
+   if(tag.object?.type!=='commit')throw Error('UNSUPPORTED_TAG_TARGET');
+   sha=tag.object.sha;
+  }
   if(!sha||!hexCommit.test(sha))throw Error('INVALID_RESOLVED_COMMIT');
   const url=`${apiBase}/zipball/${sha}`;
   let response=await this.fetcher(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
