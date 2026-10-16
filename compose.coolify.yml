@@ -25,6 +25,13 @@ services:
       OAUTH_ALLOWED_REDIRECT_HOSTS: ${OAUTH_ALLOWED_REDIRECT_HOSTS:?required}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?required}
     expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('node:http').get('http://127.0.0.1:3000/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    stop_grace_period: 20s
     depends_on:
       migrate:
         condition: service_completed_successfully
