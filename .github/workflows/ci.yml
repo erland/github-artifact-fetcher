@@ -3,12 +3,52 @@ on: [push, pull_request]
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dev003-lockfile
+          path: package-lock.json
+          retention-days: 1
       - run: npm ci --no-audit --no-fund
+      - name: Provision test DB and roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "CREATE USER github_artifact_fetcher_app PASSWORD 'runtime_test';"
+          psql -h localhost -U postgres -c "CREATE USER github_artifact_fetcher_migrator PASSWORD 'migrate_test';"
+          psql -h localhost -U postgres -c "CREATE DATABASE github_artifact_fetcher OWNER github_artifact_fetcher_migrator;"
+          psql -h localhost -U postgres -d github_artifact_fetcher -c "GRANT CONNECT ON DATABASE github_artifact_fetcher TO github_artifact_fetcher_app;"
+          psql -h localhost -U postgres -d github_artifact_fetcher -c "GRANT USAGE ON SCHEMA public TO github_artifact_fetcher_app;"
+      - name: Flyway migrations
+        run: |
+          docker run --rm --network host -v "$PWD/db/migration:/flyway/sql:ro" flyway/flyway:11.18 -url=jdbc:postgresql://localhost:5432/github_artifact_fetcher -user=github_artifact_fetcher_migrator -password=migrate_test -locations=filesystem:/flyway/sql migrate
+      - name: Flyway validation and repeat startup
+        run: |
+          docker run --rm --network host -v "$PWD/db/migration:/flyway/sql:ro" flyway/flyway:11.18 -url=jdbc:postgresql://localhost:5432/github_artifact_fetcher -user=github_artifact_fetcher_migrator -password=migrate_test -locations=filesystem:/flyway/sql validate
+          docker run --rm --network host -v "$PWD/db/migration:/flyway/sql:ro" flyway/flyway:11.18 -url=jdbc:postgresql://localhost:5432/github_artifact_fetcher -user=github_artifact_fetcher_migrator -password=migrate_test -locations=filesystem:/flyway/sql migrate
+      - name: Verify DDL denied to runtime
+        env:
+          PGPASSWORD: runtime_test
+        run: |
+          if psql -h localhost -U github_artifact_fetcher_app -d github_artifact_fetcher -v ON_ERROR_STOP=1 -c 'CREATE TABLE forbidden_runtime_ddl(id int);'; then
+            echo 'Runtime user must not have DDL'; exit 1
+          fi
       - run: npm run verify
+        env:
+          TEST_DATABASE_URL: postgres://github_artifact_fetcher_app:runtime_test@localhost:5432/github_artifact_fetcher
       - run: docker build -t github-artifact-fetcher:ci .
