@@ -1,0 +1,7 @@
+FROM flyway/flyway:11.18
+COPY db/migration/ /flyway/sql/
+# Validate that the image contains the expected versioned migrations at build time.
+USER root
+RUN test -f /flyway/sql/V1__initial_schema.sql && \
+    test -f /flyway/sql/V7__security_retention_indexes.sql && \
+    test "$(find /flyway/sql -maxdepth 1 -type f -name 'V*__*.sql' | wc -l)" -ge 7
