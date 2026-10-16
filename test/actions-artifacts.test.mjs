@@ -52,3 +52,7 @@ test('oversize metadata rejected',async()=>{
  const {api}=service();
  await assert.rejects(api.list('github:1','../repo',42),/INVALID_REPOSITORY/);
 });
+
+test('Actions rejects ZIP local header without valid central directory',async()=>{
+ await assert.rejects(service({bytes:Buffer.from([80,75,3,4,0,0,0,0])}).api.download('github:1','demo/repo',42,77),/INVALID_ZIP/);
+});
