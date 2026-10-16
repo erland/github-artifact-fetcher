@@ -8,12 +8,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dependency-lockfile
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+          cache: npm
+      - run: npm ci --no-audit --no-fund
       - run: npm run verify
       - run: docker build -t github-artifact-fetcher:ci .
