@@ -83,6 +83,7 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
    if(!response.ok){
     if([400,401,403].includes(response.status)){
      await client.query('ROLLBACK');
+     await this.revokeLocal(user);
      return null;
     }
     throw Error('github_refresh_failed');
