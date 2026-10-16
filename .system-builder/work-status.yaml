@@ -14,21 +14,20 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-release-gates
-  reason: Server-persisted single-use OAuth consent with user/client/session context, tamper and replay tests passed. External ChatGPT and deployment acceptance remains blocked by explicit no-deployment requirement.
+  recommended: DEV-010-github-app-permissions
+  reason: OAuth registration allowlist and client-scoped token revocation pass CI. Next harden installation-permission and GitHub revocation handling before external acceptance.
 verification:
-  oauth_consent_binding: passed
-  oauth_session_swap_and_csrf: passed
-  oauth_replay_tamper: passed
-  flyway_v5: passed
+  oauth_registration_allowlist: passed
+  oauth_token_revocation: passed
+  oauth_security_tests: passed
   github_ci: passed
   docker_build: passed
-  implementation_revision: e8f53f87e8d0210c7eba1a8790e6f4ef62568168
-  github_ci_run: 38859915518
+  implementation_revision: d830ebda8d783418147ed133476838732fbb7974
+  github_ci_run: 38888704392
   native_chatgpt_file_attachment: unverified
   live_github_downloads: unverified
   coolify_staging: not_deployed
-  evidence_reference: docs/DEV-010-oauth-consent.md
+  evidence_reference: docs/DEV-010-registration-revocation.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
