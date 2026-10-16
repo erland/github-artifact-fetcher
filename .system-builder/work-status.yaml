@@ -6,20 +6,24 @@ in_progress: null
 completed_steps:
   - DEV-001
   - DEV-002
+  - DEV-003
 next:
-  recommended: DEV-003
-  reason: DEV-002 official MCP SDK, pinned dependencies, CI and Docker are verified; build PostgreSQL and automatic Flyway startup migrations next.
+  recommended: DEV-004
+  reason: PostgreSQL Flyway migrations, least-privilege role, CI integration tests and Docker verified; implement MCP OAuth.
 verification:
   typescript_build: passed
   runtime_tests: passed
   docker_build: passed
   github_ci: passed
-  official_mcp_sdk: passed
-  implementation_revision: 6bdfe152d62271df3a52c069a3abde6a3ee44b32
-  github_ci_run: 38847003187
+  database_integration: passed
+  flyway_migrate_validate_repeat: passed
+  runtime_ddl_denied: passed
+  implementation_revision: 60155907f68685bd8a5f678db9c3ae6bf8f3a99c
+  github_ci_run: 38847831060
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-002.md
+  evidence_reference: docs/DEV-003.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_mcp_oauth: required_before_release
+  production_compose_startup: required_before_release
   sdk_conformance: passed_dev002
