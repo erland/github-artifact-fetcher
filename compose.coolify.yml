@@ -22,6 +22,7 @@ services:
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?required}
       GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?required}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?required}
+      OAUTH_ALLOWED_REDIRECT_HOSTS: ${OAUTH_ALLOWED_REDIRECT_HOSTS:?required}
     expose: ["3000"]
     depends_on:
       migrate:
