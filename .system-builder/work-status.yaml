@@ -14,8 +14,8 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-remaining-security-and-acceptance
-  reason: Bounded expired-data cleanup and 30-day webhook replay ledger retention pass CI; external file acceptance, archive safety and distributed limits are still open.
+  recommended: DEV-010-live-acceptance-and-operational-security
+  reason: Strict ZIP central directory, CRC, decompression and zip-bomb controls pass CI for Releases, Actions and repository archives. Live format compatibility, native ChatGPT file delivery and distributed controls remain open.
 verification:
   security_retention_tests: passed
   retention_runtime_least_privilege: passed
@@ -27,7 +27,12 @@ verification:
   native_chatgpt_file_attachment: unverified
   live_github_webhook: unverified
   coolify_staging: not_deployed
-  evidence_reference: docs/DEV-010-security-retention.md
+  zip_structure_and_crc: passed_ci
+  zip_bomb_and_traversal: passed_ci
+  zip_source_integration_tests: passed_ci
+  zip_implementation_revision: 4a5b5aaede25c0a19166d1af6b37b943853b70d3
+  zip_github_ci_run: 38915035367
+  evidence_reference: docs/DEV-010-zip-safety.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
@@ -35,5 +40,5 @@ release_gates:
   live_github_app_callback: required_before_release
   live_github_webhooks: required_before_release
   distributed_rate_limit_and_log_retention: required_before_release
-  archive_validation: required_before_release
+  archive_live_compatibility: required_before_release
   production_compose_startup: required_before_release
