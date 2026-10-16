@@ -1,0 +1,43 @@
+# Prepared for later Coolify deployment; not deployed or tested against Coolify.
+# Coolify should route TLS to app:3000 and only expose the app through its proxy.
+services:
+  migrate:
+    image: flyway/flyway:11.18
+    command: -connectRetries=30 -locations=filesystem:/flyway/sql migrate
+    environment:
+      FLYWAY_URL: ${FLYWAY_JDBC_URL:?required}
+      FLYWAY_USER: ${DATABASE_MIGRATION_USER:?required}
+      FLYWAY_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?required}
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+    restart: "no"
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?required}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?required}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?required}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?required}
+      OAUTH_ALLOWED_REDIRECT_HOSTS: ${OAUTH_ALLOWED_REDIRECT_HOSTS:?required}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?required}
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('node:http').get('http://127.0.0.1:3000/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    stop_grace_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 512m

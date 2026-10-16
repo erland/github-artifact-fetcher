@@ -1,0 +1,26 @@
+{
+  "name": "github-artifact-fetcher",
+  "version": "0.3.0-dev003",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "node --test test/*.test.mjs",
+    "test:poc": "node --test test/poc.test.mjs",
+    "verify": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "@modelcontextprotocol/node": "2.1.1",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.0"
+  }
+}

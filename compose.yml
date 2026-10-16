@@ -1,0 +1,27 @@
+services:
+  migrate:
+    image: flyway/flyway:11.18
+    command: -connectRetries=30 -locations=filesystem:/flyway/sql migrate
+    environment:
+      FLYWAY_URL: ${FLYWAY_JDBC_URL:?set FLYWAY_JDBC_URL}
+      FLYWAY_USER: ${DATABASE_MIGRATION_USER:?set DATABASE_MIGRATION_USER}
+      FLYWAY_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?set DATABASE_MIGRATION_PASSWORD}
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+    restart: "no"
+  app:
+    build: .
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?set GITHUB_APP_CLIENT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      OAUTH_ALLOWED_REDIRECT_HOSTS: ${OAUTH_ALLOWED_REDIRECT_HOSTS:?set OAUTH_ALLOWED_REDIRECT_HOSTS}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET}
+      PORT: 3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"

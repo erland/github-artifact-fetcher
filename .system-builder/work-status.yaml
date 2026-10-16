@@ -1,0 +1,63 @@
+project: github-artifact-fetcher
+phase: create_implementation
+planning_complete: true
+selected_step: DEV-010
+in_progress: DEV-010
+completed_steps:
+  - DEV-001
+  - DEV-002
+  - DEV-003
+  - DEV-004
+  - DEV-005
+  - DEV-006
+  - DEV-007
+  - DEV-008
+  - DEV-009
+next:
+  recommended: DEV-010-authorized-staging-acceptance
+  reason: Coolify Compose syntax, DB migration/role CI, production configuration and readiness controls are verified without deployment. Real Coolify/GitHub/ChatGPT acceptance awaits authorization.
+verification:
+  security_retention_tests: passed
+  retention_runtime_least_privilege: passed
+  flyway_v7: passed
+  github_ci: passed
+  docker_build: passed
+  implementation_revision: 17078be4ecc1e9aa27c0fba74b1340e57229e504
+  github_ci_run: 38900383039
+  native_chatgpt_file_attachment: unverified
+  live_github_webhook: unverified
+  coolify_staging: not_deployed
+  zip_structure_and_crc: passed_ci
+  zip_bomb_and_traversal: passed_ci
+  zip_source_integration_tests: passed_ci
+  zip_implementation_revision: 4a5b5aaede25c0a19166d1af6b37b943853b70d3
+  zip_github_ci_run: 38915035367
+  consolidated_release_review: completed
+  zip_overlap_runtime_improvement: passed_ci
+  zip_ambiguous_prefix_tests: passed_ci
+  consolidated_review_implementation_revision: 97d2381aa9483a69ed84ff43a0adcabd7699622b
+  consolidated_review_ci_run: 38916169686
+  release_decision: blocked_pending_external_acceptance
+  file_handoff_contract_version: 1
+  file_handoff_delivery_type: one_time_https_url
+  file_handoff_native_attachment: unverified
+  file_formats_acceptance_ci: passed_zip_pdf_epub
+  file_handoff_implementation_revision: 96e1dce92fe8e12be38fd84b2bf70b8fa6dd7046
+  file_handoff_ci_run: 38925934682
+  coolify_compose_syntax: passed_ci
+  coolify_readiness_configuration: prepared_not_live_tested
+  runtime_and_migrator_role_tests: passed_ci
+  docker_build: passed_ci
+  coolify_preparation_implementation_revision: 9f34b02d98f7ed81970d1f5ab19359ab7c911623
+  coolify_preparation_ci_run: 38929763961
+  coolify_staging: not_deployed
+  evidence_reference: docs/DEV-010-coolify-test-installation.md
+release_gates:
+  chatgpt_file_handoff: required_before_release
+  live_github_downloads: required_before_release
+  live_mcp_oauth: required_before_release
+  live_github_app_callback: required_before_release
+  live_github_webhooks: required_before_release
+  distributed_rate_limit_and_log_retention: required_before_release
+  archive_live_compatibility: required_before_release
+  production_compose_startup: required_before_release

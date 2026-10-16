@@ -1,0 +1,2 @@
+declare module 'node:http' { namespace http { interface ServerResponse { writeHead(code:number, headers?:Record<string,string>):void; end(value?:string):void; } } const http: {createServer(callback:(req:{method?:string;url?:string;[Symbol.asyncIterator]():AsyncIterableIterator<Uint8Array>},res:http.ServerResponse)=>unknown):{listen(port:number,host:string):void}};export = http; }
+declare const process: {argv:string[];env:Record<string,string|undefined>};
