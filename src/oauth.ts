@@ -32,12 +32,13 @@ export class OAuth {
   const r=await this.config.pool.query('SELECT redirect_uris FROM mcp_oauth_clients WHERE client_id=$1',[clientId]);
   return r.rowCount===1&&(r.rows[0].redirect_uris as string[]).includes(redirect);
  }
- async authenticate(req:IncomingMessage):Promise<boolean>{
+ async subject(req:IncomingMessage):Promise<string|null>{
   const match=/^Bearer ([A-Za-z0-9_-]+)$/.exec(req.headers.authorization??'');
-  if(!match)return false;
-  const r=await this.config.pool.query("SELECT 1 FROM mcp_oauth_grants WHERE grant_hash=$1 AND kind='access' AND resource=$2 AND expires_at>NOW() AND consumed_at IS NULL",[hash(match[1]),this.resource]);
-  return r.rowCount===1;
+  if(!match)return null;
+  const r=await this.config.pool.query("SELECT user_subject FROM mcp_oauth_grants WHERE grant_hash=$1 AND kind='access' AND resource=$2 AND expires_at>NOW() AND consumed_at IS NULL",[hash(match[1]),this.resource]);
+  return r.rowCount===1?r.rows[0].user_subject:null;
  }
+ async authenticate(req:IncomingMessage):Promise<boolean>{return (await this.subject(req))!==null;}
  async handle(req:IncomingMessage,res:ServerResponse,url:URL):Promise<boolean>{
   const path=url.pathname;
   if(req.method==='GET'&&['/.well-known/oauth-authorization-server','/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'].includes(path)){
