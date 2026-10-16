@@ -14,8 +14,8 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-live-client-file-acceptance
-  reason: Versioned HTTPS file handoff contract and deterministic ZIP/PDF/EPUB tests pass CI. Native ChatGPT attachment remains unverified; external GitHub and Coolify acceptance intentionally deferred.
+  recommended: DEV-010-authorized-staging-acceptance
+  reason: Coolify Compose syntax, DB migration/role CI, production configuration and readiness controls are verified without deployment. Real Coolify/GitHub/ChatGPT acceptance awaits authorization.
 verification:
   security_retention_tests: passed
   retention_runtime_least_privilege: passed
@@ -44,7 +44,14 @@ verification:
   file_formats_acceptance_ci: passed_zip_pdf_epub
   file_handoff_implementation_revision: 96e1dce92fe8e12be38fd84b2bf70b8fa6dd7046
   file_handoff_ci_run: 38925934682
-  evidence_reference: docs/DEV-010-file-handoff-contract.md
+  coolify_compose_syntax: passed_ci
+  coolify_readiness_configuration: prepared_not_live_tested
+  runtime_and_migrator_role_tests: passed_ci
+  docker_build: passed_ci
+  coolify_preparation_implementation_revision: 9f34b02d98f7ed81970d1f5ab19359ab7c911623
+  coolify_preparation_ci_run: 38929763961
+  coolify_staging: not_deployed
+  evidence_reference: docs/DEV-010-coolify-test-installation.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
