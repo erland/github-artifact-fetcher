@@ -47,3 +47,19 @@ test('GitHub 401 automatically revokes only the affected user', {skip:!process.e
   await pool.end();
  }
 });
+
+test('permanently rejected refresh token removes only the affected connection', {skip:!process.env.TEST_DATABASE_URL},async()=>{
+ const pool=new Pool({connectionString:process.env.TEST_DATABASE_URL});
+ const user='github:refresh-reject-test',other='github:refresh-untouched';
+ const key=randomBytes(32);
+ const identity=new GitHubIdentity({pool,clientId:'test',clientSecret:'secret',publicBaseUrl:'https://example.test',encryptionKey:key,fetcher:async()=>new Response(JSON.stringify({error:'bad_verification_code'}),{status:401})});
+ try{
+  for(const subject of [user,other])await pool.query("INSERT INTO github_connections(id,user_subject,encrypted_token,encrypted_refresh_token,token_expires_at,refresh_expires_at) VALUES(gen_random_uuid(),$1,$2,$3,NOW()-interval '1 day',NOW()+interval '1 day') ON CONFLICT(user_subject) DO UPDATE SET encrypted_token=EXCLUDED.encrypted_token,encrypted_refresh_token=EXCLUDED.encrypted_refresh_token,token_expires_at=EXCLUDED.token_expires_at,refresh_expires_at=EXCLUDED.refresh_expires_at",[subject,Buffer.from('unused'),identity.enc('expired-refresh')]);
+  assert.equal(await identity.tokenFor(user),null);
+  assert.equal((await pool.query('SELECT 1 FROM github_connections WHERE user_subject=$1',[user])).rowCount,0);
+  assert.equal((await pool.query('SELECT 1 FROM github_connections WHERE user_subject=$1',[other])).rowCount,1);
+ }finally{
+  await pool.query('DELETE FROM github_connections WHERE user_subject = ANY($1)',[[user,other]]);
+  await pool.end();
+ }
+});
