@@ -24,7 +24,8 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth}={}){
    const ok=database?await database.ready():false;
    return json(res,ok?200:503,{status:ok?'ready':'not_ready',database:ok});
   }
-  if(oauth&&await oauth.handle(req,res,new URL(req.url??'/',oauth.issuer)))return;
+  try { if(oauth&&await oauth.handle(req,res,new URL(req.url??'/',oauth.issuer)))return; }
+  catch { if(!res.headersSent)json(res,500,{error:'OAUTH_REQUEST_FAILED'});else res.end();return; }
   if(path!=='/mcp')return json(res,404,{error:'NOT_FOUND'});
   if(!oauth||!await oauth.authenticate(req)){
    res.writeHead(401,{'content-type':'application/json','WWW-Authenticate':`Bearer resource_metadata="${oauth?.issuer??'https://localhost'}/.well-known/oauth-protected-resource/mcp"`});res.end(JSON.stringify({error:'unauthorized'}));return;
