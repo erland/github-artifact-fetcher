@@ -65,5 +65,10 @@ jobs:
           GHAF_IMAGE_TAG: 0.5.0
         run: |
           docker compose -f compose.coolify.yml config -q
-          docker compose -f compose.coolify.yml config --format json | jq -e '.services.app.image == "ghcr.io/erland/github-artifact-fetcher:0.5.0" and (.services.app | has("build") | not) and (.services | has("postgres") | not) and (.services | has("db") | not)'
-      - run: docker build -t github-artifact-fetcher:ci .
+          docker compose -f compose.coolify.yml config --format json | jq -e '.services.app.image == "ghcr.io/erland/github-artifact-fetcher:0.5.0" and (.services.app | has("build") | not) and (.services | has("postgres") | not) and (.services | has("db") | not) and .services.migrate.image == "ghcr.io/erland/github-artifact-fetcher-migrations:0.5.0" and (.services.migrate | has("volumes") | not)'
+      - name: Verify both GHCR image build definitions
+        run: |
+          docker build -t github-artifact-fetcher:ci .
+          docker build -f Dockerfile.migrations -t github-artifact-fetcher-migrations:ci .
+          count=$(docker run --rm --entrypoint sh github-artifact-fetcher-migrations:ci -c 'find /flyway/sql -maxdepth 1 -name "V*__*.sql" -type f | wc -l')
+          test "$count" -ge 7
