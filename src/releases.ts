@@ -1,3 +1,4 @@
+import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 export type ReleaseAsset={id:number;name:string;size:number;content_type:string;digest?:string|null;browser_download_url?:string};
 export type Release={tag_name:string;assets:ReleaseAsset[]};
@@ -43,13 +44,12 @@ export class ReleaseService {
   if(response.status===302||response.status===307){
    const location=response.headers.get('location');
    if(!location)throw Error('MISSING_REDIRECT');
-   const target=new URL(location);
-   if(target.protocol!=='https:'||target.username||target.password||target.port||!['release-assets.githubusercontent.com','objects.githubusercontent.com'].includes(target.hostname))throw Error('UNTRUSTED_REDIRECT');
+   const target=new URL(safeDownloadRedirect(location,new Set(['release-assets.githubusercontent.com','objects.githubusercontent.com'])));
    response=await this.fetcher(target.toString(),{redirect:'manual',signal:AbortSignal.timeout(30000)});
   }
   if(!response.ok||response.status>=300)throw Error('ASSET_DOWNLOAD_HTTP_'+response.status);
-  const declared=Number(response.headers.get('content-length'));
-  if(Number.isFinite(declared)&&declared>assetLimit)throw Error('ASSET_TOO_LARGE');
+  safeContentLength(response.headers.get('content-length'),assetLimit);
+  safeResponseStatus(response);
   if(!response.body)throw Error('EMPTY_DOWNLOAD');
   const chunks:Buffer[]=[];let total=0;
   const reader=response.body.getReader();
