@@ -1,17 +1,16 @@
 # Prepared for Coolify using a published GHCR application image and external PostgreSQL.
-# Flyway still reads versioned SQL migration files from the Git checkout.
-# Verify the checkout is compatible with the chosen GHAF_IMAGE_TAG before deploying.
+# Both application and migrations images must use the same GHAF_IMAGE_TAG.
+# Neither service requires a source-tree bind mount.
 # Coolify should route TLS to app:3000; do not expose port 3000 publicly.
 services:
   migrate:
-    image: flyway/flyway:11.18
+    image: ghcr.io/erland/github-artifact-fetcher-migrations:${GHAF_IMAGE_TAG:?required}
+    pull_policy: always
     command: -connectRetries=30 -locations=filesystem:/flyway/sql migrate
     environment:
       FLYWAY_URL: jdbc:postgresql://${DB_HOST:?required}:${DB_PORT:-5432}/${DB_NAME:?required}
       FLYWAY_USER: ${DB_MIGRATION_USER:?required}
       FLYWAY_PASSWORD: ${DB_MIGRATION_PASSWORD:?required}
-    volumes:
-      - ./db/migration:/flyway/sql:ro
     restart: "no"
   app:
     image: ghcr.io/erland/github-artifact-fetcher:${GHAF_IMAGE_TAG:?set GHAF_IMAGE_TAG to a published version such as 0.5.0}
