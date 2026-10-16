@@ -14,24 +14,21 @@ completed_steps:
   - DEV-008
   - DEV-009
 next:
-  recommended: DEV-010-oauth-binding
-  reason: Targeted release review identified OAuth consent binding and remaining native file acceptance gaps; fix in PR before requesting deployment.
+  recommended: DEV-010-release-gates
+  reason: Server-persisted single-use OAuth consent with user/client/session context, tamper and replay tests passed. External ChatGPT and deployment acceptance remains blocked by explicit no-deployment requirement.
 verification:
-  explicit_oauth_consent_csrf: passed_ci
-  capped_rate_limiter: passed_ci
-  one_time_binary_links: passed_ci
-  coolify_compose: prepared_not_deployed
+  oauth_consent_binding: passed
+  oauth_session_swap_and_csrf: passed
+  oauth_replay_tamper: passed
+  flyway_v5: passed
   github_ci: passed
   docker_build: passed
-  implementation_revision: 5b98568946c823cfcfce9d6e33554f2d16d357ba
-  github_ci_run: 38853694144
+  implementation_revision: e8f53f87e8d0210c7eba1a8790e6f4ef62568168
+  github_ci_run: 38859915518
   native_chatgpt_file_attachment: unverified
   live_github_downloads: unverified
   coolify_staging: not_deployed
-  security_review_implementation_revision: 97846886dd630acf3275a3fbdd0dbc2a43ecb507
-  security_review_ci_run: 38859107189
-  download_memory_cap: passed_ci
-  evidence_reference: docs/DEV-010-security-review.md
+  evidence_reference: docs/DEV-010-oauth-consent.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_github_downloads: required_before_release
