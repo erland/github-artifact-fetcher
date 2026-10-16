@@ -1,3 +1,4 @@
+import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 import type {GitHubCredentials,FileOutput} from './releases.js';
 const MAX_BYTES=20*1024*1024;
@@ -47,13 +48,12 @@ export class RepositoryArchives {
   if([302,307].includes(response.status)){
    const raw=response.headers.get('location');
    if(!raw)throw Error('MISSING_REDIRECT');
-   const next=new URL(raw);
-   if(next.protocol!=='https:'||next.username||next.password||next.port||!['codeload.github.com','objects.githubusercontent.com'].includes(next.hostname))throw Error('UNTRUSTED_REDIRECT');
+   const next=new URL(safeDownloadRedirect(raw,new Set(['codeload.github.com','objects.githubusercontent.com'])));
    response=await this.fetcher(next.toString(),{redirect:'manual',signal:AbortSignal.timeout(30000)});
   }
   if(!response.ok||response.status>=300)throw Error('ARCHIVE_DOWNLOAD_HTTP_'+response.status);
-  const length=response.headers.get('content-length');
-  if(length!==null&&(!/^\d+$/.test(length)||Number(length)>MAX_BYTES))throw Error('ARCHIVE_TOO_LARGE');
+  safeContentLength(response.headers.get('content-length'),MAX_BYTES);
+  safeResponseStatus(response);
   if(!response.body)throw Error('EMPTY_DOWNLOAD');
   const reader=response.body.getReader(),chunks:Buffer[]=[];let size=0;
   try{while(true){const {done,value}=await reader.read();if(done)break;const b=Buffer.from(value);size+=b.length;if(size>MAX_BYTES)throw Error('ARCHIVE_TOO_LARGE');chunks.push(b);}}
