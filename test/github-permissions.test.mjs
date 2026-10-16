@@ -31,3 +31,19 @@ test('permission denied without installation, suspended installation, repository
  assert.equal(await identity.repositoryAllowed('github:one','org','project'),false);
  assert.equal(calls.some(x=>x.includes('/user/installations/1/repositories')),false);
 });
+
+test('GitHub 401 automatically revokes only the affected user', {skip:!process.env.TEST_DATABASE_URL},async()=>{
+ const pool=new Pool({connectionString:process.env.TEST_DATABASE_URL});
+ const subject='github:401-test',other='github:401-other';
+ try{
+  for(const user of [subject,other])await pool.query("INSERT INTO github_connections(id,user_subject,encrypted_token,token_expires_at) VALUES(gen_random_uuid(),$1,$2,NOW()+interval '1 day') ON CONFLICT(user_subject) DO UPDATE SET encrypted_token=EXCLUDED.encrypted_token,token_expires_at=EXCLUDED.token_expires_at",[user,Buffer.from('fixture')]);
+  const identity=new GitHubIdentity({pool,clientId:'test',clientSecret:'secret',publicBaseUrl:'https://example.test',encryptionKey:randomBytes(32),fetcher:async()=>new Response('{}',{status:401})});
+  identity.tokenFor=async()=> 'stale-user-token';
+  assert.equal(await identity.repositoryAllowed(subject,'org','repo'),false);
+  assert.equal((await pool.query('SELECT 1 FROM github_connections WHERE user_subject=$1',[subject])).rowCount,0);
+  assert.equal((await pool.query('SELECT 1 FROM github_connections WHERE user_subject=$1',[other])).rowCount,1);
+ }finally{
+  await pool.query('DELETE FROM github_connections WHERE user_subject = ANY($1)',[[subject,other]]);
+  await pool.end();
+ }
+});
