@@ -8,7 +8,8 @@ import {createServer} from '../dist/server.js';
 test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial', {skip:!process.env.TEST_DATABASE_URL},async()=>{
  const pool=new Pool({connectionString:process.env.TEST_DATABASE_URL});
  const issuer='https://artifact.example.test';
- const oauth=new OAuth({issuer,pool,principal:async()=> 'test-github-subject'});
+ let currentUser='test-github-subject';
+ const oauth=new OAuth({issuer,pool,principal:async()=>currentUser});
  const server=createServer({database:{ready:async()=>true,close:async()=>{}},oauth});
  await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
  try{
@@ -37,6 +38,13 @@ test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial',
   const tampered=new URLSearchParams(fields);tampered.set('csrf','a'.repeat(43));
   const tamper=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',cookie:consentCookie},body:tampered,redirect:'manual'});
   assert.equal(tamper.status,403);
+  currentUser='other-github-user';
+  const otherUser=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',cookie:consentCookie},body:fields,redirect:'manual'});
+  assert.equal(otherUser.status,403);
+  currentUser='test-github-subject';
+  const modified=new URLSearchParams(fields);modified.set('client_id','attacker-client');modified.set('redirect_uri','https://attacker.example/callback');modified.set('state','attacker-state');modified.set('code_challenge','b'.repeat(43));
+  const rejectedExtra=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',cookie:consentCookie},body:modified,redirect:'manual'});
+  assert.equal(rejectedExtra.status,403);
   const approved=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',cookie:consentCookie},body:fields,redirect:'manual'});
   assert.equal(approved.status,302);
   const replay=await fetch(base+'/authorize',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',cookie:consentCookie},body:fields,redirect:'manual'});
