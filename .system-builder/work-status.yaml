@@ -8,22 +8,28 @@ completed_steps:
   - DEV-002
   - DEV-003
   - DEV-004
+  - DEV-005
 next:
-  recommended: DEV-005
-  reason: MCP OAuth server, PKCE, rotating tokens, PostgreSQL migration and CI tests verified; connect trusted GitHub identity next.
+  recommended: DEV-006
+  reason: GitHub App OAuth trusted identity, encrypted rotating tokens and repository permission tests passed. Implement release asset retrieval next.
 verification:
-  dev003: passed
-  oauth_flyway_migration: passed
-  oauth_integration_tests: passed
+  github_oauth_identity_tests: passed
+  github_token_encryption_rotation: passed
+  repository_access_checks: passed
+  oauth_state_replay: passed
+  flyway_v4: passed
+  postgres_integration: passed
   sdk_contract_tests: passed
   docker_build: passed
   github_ci: passed
-  implementation_revision: afe963170eb36e661be7964754b9a6bb27638019
-  github_ci_run: 38848924654
+  implementation_revision: 1b4557efc4aff7f07f17003d56c0bb29b9a24932
+  github_ci_run: 38849479058
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-004.md
+  evidence_reference: docs/DEV-005.md
 release_gates:
   chatgpt_file_handoff: required_before_release
   live_mcp_oauth: required_before_release
-  github_identity_integration: DEV-005
+  live_github_app_callback: required_before_release
+  github_app_installation_permissions: required_before_release
+  public_oauth_security_hardening: required_before_release
   production_compose_startup: required_before_release
