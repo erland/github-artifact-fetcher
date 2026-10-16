@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {RepositoryArchives} from '../dist/repository-archives.js';
-const commit='a'.repeat(40),zip=Buffer.from([80,75,3,4,0,0,0,0]);
+const commit='a'.repeat(40),zip=Buffer.from('504b0506'+'00'.repeat(18),'hex');
 const identity={repositoryAllowed:async(user,owner,name)=>user==='github:1'&&owner==='demo'&&name==='repo',tokenFor:async()=> 'secret'};
 function setup(settings={}){
  const calls=[];
