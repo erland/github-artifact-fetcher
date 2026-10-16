@@ -4,7 +4,7 @@ import {createServer} from '../dist/server.js';
 import {parseArtifactRequest} from '../dist/contracts.js';
 test('artifact contract validates repository',()=>{assert.equal(parseArtifactRequest({source:'release',repository:'example/repo',selector:'v1'}).source,'release');assert.throws(()=>parseArtifactRequest({source:'release',repository:'../../etc',selector:'x'}));});
 test('official MCP SDK contract',async()=>{
- const server=createServer({database:{ready:async()=>true,close:async()=>{}}});
+ const server=createServer({database:{ready:async()=>true,close:async()=>{}},oauth:{handle:async()=>false,authenticate:async()=>true}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  try{
   const url='http://127.0.0.1:'+server.address().port;
