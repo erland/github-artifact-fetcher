@@ -11,22 +11,24 @@ completed_steps:
   - DEV-005
   - DEV-006
   - DEV-007
+  - DEV-008
 next:
-  recommended: DEV-008
-  reason: Workflow run artifact list, ZIP download, expiry and redirect validation, and CI tests verified; implement repository archives.
+  recommended: DEV-009
+  reason: Repository ZIP with explicit branch/tag/commit, permissions, bounded stream, redirect controls, CI and Docker verified; harden and validate security next.
 verification:
-  actions_artifact_tests: passed
-  actions_expiry_and_permissions: passed
-  actions_redirect_zip_limits: passed
+  repository_archive_tests: passed
+  explicit_git_ref_resolution: passed
+  redirect_and_permission_tests: passed
   github_ci: passed
   docker_build: passed
-  implementation_revision: fa1649f0266d174f5b0531459bab9fbdb56cda40
-  github_ci_run: 38850590486
-  github_live_actions_download: deferred_external_acceptance
+  implementation_revision: e8078cda14a897f2ce97389d073d32ef596993ed
+  github_ci_run: 38850900778
+  live_github_archive_download: deferred_external_acceptance
   chatgpt_live_handoff: deferred_external_acceptance
-  evidence_reference: docs/DEV-007.md
+  evidence_reference: docs/DEV-008.md
 release_gates:
   chatgpt_file_handoff: required_before_release
+  live_github_archive_download: required_before_release
   live_github_actions_download: required_before_release
   live_github_asset_download: required_before_release
   live_mcp_oauth: required_before_release
