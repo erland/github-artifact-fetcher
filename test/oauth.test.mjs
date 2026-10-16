@@ -7,6 +7,7 @@ import {createServer} from '../dist/server.js';
 
 test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial', {skip:!process.env.TEST_DATABASE_URL},async()=>{
  const pool=new Pool({connectionString:process.env.TEST_DATABASE_URL});
+ process.env.OAUTH_ALLOWED_REDIRECT_HOSTS='client.example.test';
  const issuer='https://artifact.example.test';
  let currentUser='test-github-subject';
  const oauth=new OAuth({issuer,pool,principal:async()=>currentUser});
@@ -61,10 +62,19 @@ test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial',
   assert.equal(await oauth.authenticate({headers:{authorization:'Bearer '+first.access_token}}),true);
   assert.equal(await oauth.authenticate({headers:{authorization:'Bearer invalid'}}),false);
   const renew=()=>fetch(base+'/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id,refresh_token:first.refresh_token})});
-  assert.equal((await renew()).status,200);
+  const rotatedResponse=await renew();
+  assert.equal(rotatedResponse.status,200);
+  const rotated=await rotatedResponse.json();
   assert.equal((await renew()).status,400);
+  const revoke=await fetch(base+'/revoke',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id,token:rotated.refresh_token})});
+  assert.equal(revoke.status,200);
+  assert.equal(await oauth.authenticate({headers:{authorization:'Bearer '+first.access_token}}),false);
+  assert.equal(await oauth.authenticate({headers:{authorization:'Bearer '+rotated.access_token}}),false);
+  const revokedRefresh=await fetch(base+'/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id,refresh_token:rotated.refresh_token})});
+  assert.equal(revokedRefresh.status,400);
   assert.equal((await fetch(base+'/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({redirect_uris:['https://example.test.evil.com/cb#fragment']})})).status,400);
  }finally{
+  delete process.env.OAUTH_ALLOWED_REDIRECT_HOSTS;
   await new Promise(ok=>server.close(ok));await pool.end();
  }
 });
