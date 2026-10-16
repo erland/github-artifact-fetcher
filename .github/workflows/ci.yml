@@ -47,4 +47,17 @@ jobs:
       - run: timeout 90s npm run verify
         env:
           TEST_DATABASE_URL: postgres://github_artifact_fetcher_app:runtime_test@localhost:5432/github_artifact_fetcher
+      - name: Validate Coolify Compose without deployment
+        env:
+          FLYWAY_JDBC_URL: jdbc:postgresql://db.example.test:5432/test
+          DATABASE_MIGRATION_USER: migration_test
+          DATABASE_MIGRATION_PASSWORD: placeholder
+          DATABASE_URL: postgres://runtime:placeholder@db.example.test:5432/test
+          PUBLIC_BASE_URL: https://artifact.example.test
+          GITHUB_APP_CLIENT_ID: placeholder
+          GITHUB_APP_CLIENT_SECRET: placeholder
+          ENCRYPTION_KEY: placeholder
+          OAUTH_ALLOWED_REDIRECT_HOSTS: client.example.test
+          GITHUB_WEBHOOK_SECRET: placeholder
+        run: docker compose -f compose.coolify.yml config -q
       - run: docker build -t github-artifact-fetcher:ci .
