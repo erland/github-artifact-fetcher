@@ -56,3 +56,32 @@ test('reject corrupted bytes, incompatible MIME, misleading extensions and insec
  assert.throws(()=>stageHandoff(cache,good,'http://artifacts.example.test'),/INVALID_DOWNLOAD_ORIGIN/);
  assert.equal(cache.size,0);
 });
+
+test('small binary MCP resource is owner-scoped, intact, and does not consume HTTPS URL',()=>{
+ const files=new EphemeralFiles(()=>0);
+ const payload=file('tiny.zip','application/zip',zip);
+ const h=stageHandoff(files,payload,'https://artifacts.example.test','github:alice');
+ assert.match(h.resourceUri,/^github-artifact-fetcher:\/\/files\/[a-f0-9]{64}$/);
+ const id=h.resourceUri.split('/').pop();
+ assert.equal(files.resource(id,'github:bob'),null);
+ const result=files.resource(id,'github:alice');
+ assert.equal(result.mimeType,'application/zip');
+ assert.equal(createHash('sha256').update(Buffer.from(result.blob,'base64')).digest('hex'),h.sha256);
+ assert.equal(files.serve(id,response()),true);
+ assert.equal(files.resource(id,'github:alice'),null);
+});
+test('large binary keeps HTTPS handoff without MCP resource',()=>{
+ const files=new EphemeralFiles(()=>0);
+ const bytes=Buffer.concat([zip,Buffer.alloc(1024*1024)]);
+ const h=stageHandoff(files,file('large.zip','application/zip',bytes),'https://artifacts.example.test','github:alice');
+ assert.equal(h.resourceUri,undefined);
+ assert.ok(h.downloadUrl.startsWith('https://'));
+});
+test('expired MCP resources are denied',()=>{
+ let clock=0;
+ const files=new EphemeralFiles(()=>clock);
+ const h=stageHandoff(files,file('tiny.zip','application/zip',zip),'https://artifacts.example.test','github:alice');
+ const id=h.resourceUri.split('/').pop();
+ clock=120001;
+ assert.equal(files.resource(id,'github:alice'),null);
+});
