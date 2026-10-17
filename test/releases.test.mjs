@@ -19,7 +19,7 @@ function service(opts={}){
 }
 test('list release metadata',async()=>{
  const x=await service().list('github:1','example/demo','v1');
- assert.equal(x[0].name,'sample.epub');assert.equal(x[0].digest,'sha256:'+digest);
+ assert.equal(x[0].name,'sample.epub');assert.equal(x[0].githubUrl,'https://github.com/example/demo/releases/download/v1/sample.epub');assert.equal(x[0].digest,'sha256:'+digest);
 });
 test('binary download verifies hash, size and strips credential on redirect',async()=>{
  const x=await service().fetch('github:1','example/demo','v1','sample.epub');

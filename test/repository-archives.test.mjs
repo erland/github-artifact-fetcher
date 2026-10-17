@@ -16,6 +16,13 @@ function setup(settings={}){
  };
  return {api:new RepositoryArchives(identity,fetcher),calls};
 }
+test('metadata-only GitHub archive URL is commit pinned',async()=>{
+ const {api,calls}=setup();
+ const x=await api.link('github:1','demo/repo',{kind:'branch',value:'main'});
+ assert.equal(x.githubUrl,'https://github.com/demo/repo/archive/'+commit+'.zip');
+ assert.equal(calls.length,1);
+ await assert.rejects(api.link('other','demo/repo',{kind:'branch',value:'main'}),/FORBIDDEN/);
+});
 test('explicit branch ZIP resolves SHA and removes credentials on CDN',async()=>{
  const {api,calls}=setup();
  const result=await api.download('github:1','demo/repo',{kind:'branch',value:'feature/new'});
