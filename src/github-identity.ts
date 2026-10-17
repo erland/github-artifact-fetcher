@@ -1,4 +1,4 @@
-import {createCipheriv,createDecipheriv,createHash,randomBytes,timingSafeEqual} from 'node:crypto';
+import {createCipheriv,createDecipheriv,createHash,createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {Pool} from 'pg';
 const sha=(v:string)=>createHash('sha256').update(v).digest('hex');
@@ -30,15 +30,19 @@ export class GitHubIdentity {
   const r=await this.config.pool.query('SELECT user_subject FROM oauth_sessions WHERE session_hash=$1 AND expires_at>NOW()',[sha(sid)]);
   return r.rows[0]?.user_subject??null;
  }
- async start(res:ServerResponse){
+ private resumeSignature(path:string){return createHmac('sha256',this.config.encryptionKey).update(path).digest('base64url');}
+ async start(req:IncomingMessage,res:ServerResponse){
   const state=random(),nonce=random();
+  const returnTo=new URL(req.url??'/',this.config.publicBaseUrl).searchParams.get('return_to');
+  const validReturn=returnTo&&returnTo.startsWith('/authorize?')&&returnTo.length<=2048&&!returnTo.includes('#')&&!returnTo.includes('\\');
+  const resumeCookie=validReturn?`ghaf_resume=${Buffer.from(returnTo).toString('base64url')}.${this.resumeSignature(returnTo)}; HttpOnly; Secure; SameSite=Lax; Path=/auth/github/callback; Max-Age=300`:null;
   await this.config.pool.query('INSERT INTO github_oauth_attempts(state_hash,nonce_hash,expires_at) VALUES($1,$2,$3)',[sha(state),sha(nonce),new Date(this.now()+300000)]);
   const redirect=new URL('https://github.com/login/oauth/authorize');
   redirect.searchParams.set('client_id',this.config.clientId);
   redirect.searchParams.set('redirect_uri',this.config.publicBaseUrl+'/auth/github/callback');
   redirect.searchParams.set('state',state);
   // GitHub App user authorization requires no broad repo scope.
-  res.writeHead(302,{'location':redirect.toString(),'cache-control':'no-store','set-cookie':`ghaf_oauth=${state}.${nonce}; HttpOnly; Secure; SameSite=Lax; Path=/auth/github; Max-Age=300`});res.end();
+  res.writeHead(302,{'location':redirect.toString(),'cache-control':'no-store','set-cookie':[ `ghaf_oauth=${state}.${nonce}; HttpOnly; Secure; SameSite=Lax; Path=/auth/github; Max-Age=300`, ...(resumeCookie?[resumeCookie]:[])]});res.end();
  }
  async callback(req:IncomingMessage,res:ServerResponse,url:URL){
   const supplied=url.searchParams.get('state')??'',code=url.searchParams.get('code')??'';
@@ -69,7 +73,15 @@ VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6)
 ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,encrypted_token=EXCLUDED.encrypted_token,encrypted_refresh_token=EXCLUDED.encrypted_refresh_token,token_expires_at=EXCLUDED.token_expires_at,refresh_expires_at=EXCLUDED.refresh_expires_at,updated_at=NOW()`,[subject,profile.id,this.enc(token.access_token),token.refresh_token?this.enc(token.refresh_token):null,expires,refreshExpires]);
   const sid=random();
   await this.config.pool.query('INSERT INTO oauth_sessions(id,user_subject,expires_at,session_hash) VALUES(gen_random_uuid(),$1,$2,$3)',[subject,new Date(this.now()+86400000),sha(sid)]);
-  res.writeHead(302,{'location':this.config.publicBaseUrl+'/', 'cache-control':'no-store','set-cookie':[clear,`ghaf_session=${sid}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`]});res.end();
+  const resume=cookie(req,'ghaf_resume')??'';
+  const [encoded,signature]=resume.split('.');
+  let returnTo='/';
+  if(encoded&&signature){
+   const candidate=Buffer.from(encoded,'base64url').toString('utf8');
+   const expected=this.resumeSignature(candidate);
+   if(candidate.startsWith('/authorize?')&&candidate.length<=2048&&signature.length===expected.length&&timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))returnTo=candidate;
+  }
+  res.writeHead(302,{'location':this.config.publicBaseUrl+returnTo, 'cache-control':'no-store','set-cookie':[clear,'ghaf_resume=; HttpOnly; Secure; SameSite=Lax; Path=/auth/github/callback; Max-Age=0',`ghaf_session=${sid}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`]});res.end();
  }
  async tokenFor(user:string):Promise<string|null>{
   const client=await this.config.pool.connect();
@@ -140,7 +152,7 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
   return false;
  }
  async route(req:IncomingMessage,res:ServerResponse,url:URL):Promise<boolean>{
-  if(req.method==='GET'&&url.pathname==='/auth/github/start'){await this.start(res);return true;}
+  if(req.method==='GET'&&url.pathname==='/auth/github/start'){await this.start(req,res);return true;}
   if(req.method==='GET'&&url.pathname==='/auth/github/callback'){await this.callback(req,res,url);return true;}
   if(req.method==='POST'&&url.pathname==='/auth/logout'){
    const sid=cookie(req,'ghaf_session');
