@@ -95,7 +95,7 @@ test('tool handoff size boundary is exactly 5 MiB and preserves binary',()=>{
  const binary=files.resource(handoff.resourceUri.split('/').pop(),'github:alice');
  assert.equal(Buffer.from(binary.blob,'base64').length,5*1024*1024);
  assert.equal(createHash('sha256').update(Buffer.from(binary.blob,'base64')).digest('hex'),handoff.sha256);
- const large=stageHandoff(files,file('oversized.zip','application/zip',make(5*5*1024*1024+1)),'https://artifacts.example.test','github:alice');
+ const large=stageHandoff(files,file('oversized.zip','application/zip',make(5*1024*1024+1)),'https://artifacts.example.test','github:alice');
  assert.equal(large.resourceUri,undefined);
  assert.ok(large.downloadUrl.startsWith('https://'));
 });
