@@ -15,11 +15,11 @@ export class ActionsArtifacts {
   if(!await this.identity.repositoryAllowed(user,owner,repo))throw Error('REPOSITORY_FORBIDDEN');
   const token=await this.identity.tokenFor(user);
   if(!token)throw Error('GITHUB_TOKEN_UNAVAILABLE');
-  return {owner,repo,token};
+  return {owner,repo,token:await this.identity.publicRepository?.(owner,repo)?null:token};
  }
  private run(runId:number){if(!Number.isSafeInteger(runId)||runId<=0)throw Error('INVALID_RUN_ID');}
- private async api(url:string,token:string){
-  const response=await this.fetcher(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)});
+ private async api(url:string,token:string|null){
+  const response=await this.fetcher(url,{headers:{...(token?{authorization:'Bearer '+token}:{}),accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw Error('GITHUB_ACTIONS_HTTP_'+response.status);
   return response;
  }
@@ -51,7 +51,7 @@ export class ActionsArtifacts {
   if(metadata.expired||metadata.expires_at&&Date.parse(metadata.expires_at)<=Date.now())throw Error('ARTIFACT_EXPIRED');
   if(!Number.isSafeInteger(metadata.size_in_bytes)||metadata.size_in_bytes<0||metadata.size_in_bytes>MAX)throw Error('ARTIFACT_TOO_LARGE');
   const url=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/artifacts/${artifactId}/zip`;
-  let response=await this.fetcher(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
+  let response=await this.fetcher(url,{headers:{...(token?{authorization:'Bearer '+token}:{}),accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
   if(response.status===410)throw Error('ARTIFACT_EXPIRED');
   if([302,307].includes(response.status)){
    const location=response.headers.get('location');
