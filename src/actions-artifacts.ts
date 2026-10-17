@@ -2,7 +2,7 @@ import {validateZip} from './zip-validation.js';
 import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
 import type {GitHubCredentials,FileOutput} from './releases.js';
-export type ActionArtifact={id:number;name:string;size_in_bytes:number;expired:boolean;expires_at:string|null;archive_download_url:string;workflow_run?:{id:number}};
+export type ActionArtifact={id:number;name:string;size_in_bytes:number;expired:boolean;expires_at:string|null;archive_download_url:string;workflow_run?:{id:number};githubUrl?:string};
 const MAX=20*1024*1024;
 const namePattern=/^[A-Za-z0-9_.-]{1,100}$/;
 function isZip(bytes:Buffer){return bytes.length>=4&&bytes[0]===0x50&&bytes[1]===0x4b&&((bytes[2]===3&&bytes[3]===4)||(bytes[2]===5&&bytes[3]===6)||(bytes[2]===7&&bytes[3]===8));}
@@ -34,7 +34,7 @@ export class ActionsArtifacts {
    if(!Array.isArray(body.artifacts))throw Error('INVALID_GITHUB_RESPONSE');
    for(const artifact of body.artifacts){
     if(Number.isSafeInteger(artifact.id)&&artifact.id>0&&typeof artifact.name==='string')
-     result.push({id:artifact.id,name:artifact.name,size_in_bytes:artifact.size_in_bytes,expired:artifact.expired,expires_at:artifact.expires_at,archive_download_url:'',workflow_run:artifact.workflow_run});
+     result.push({id:artifact.id,name:artifact.name,size_in_bytes:artifact.size_in_bytes,expired:artifact.expired,expires_at:artifact.expires_at,archive_download_url:'',githubUrl:`https://github.com/${owner}/${repo}/actions/runs/${runId}`,workflow_run:artifact.workflow_run});
    }
    if(body.artifacts.length<100)return result;
   }
