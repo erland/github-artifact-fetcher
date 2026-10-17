@@ -85,8 +85,12 @@ jobs:
         run: timeout 90s npm run verify
         env:
           TEST_DATABASE_URL: postgres://github_artifact_fetcher_app:runtime_test@localhost:5432/github_artifact_fetcher
-      - name: Verify multi-arch Dockerfile can build
-        run: docker build -t github-artifact-fetcher:verification .
+      - name: Verify application and migrations images build
+        run: |
+          docker build -t github-artifact-fetcher:verification .
+          docker build -f Dockerfile.migrations -t github-artifact-fetcher-migrations:verification .
+          count=$(docker run --rm --entrypoint sh github-artifact-fetcher-migrations:verification -c 'find /flyway/sql -maxdepth 1 -name "V*__*.sql" -type f | wc -l')
+          test "$count" -ge 7
   publish:
     needs: verify
     runs-on: ubuntu-latest
@@ -123,6 +127,35 @@ jobs:
             if [ "$PRERELEASE" = false ]; then echo "$image:latest"; fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
+      - name: Migration image version tags
+        id: migration-tags
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          REF_SHA: ${{ needs.verify.outputs.sha }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-migrations"
+          {
+            echo 'tags<<EOF'
+            echo "$image:$VERSION"
+            echo "$image:v$VERSION"
+            echo "$image:sha-${REF_SHA:0:12}"
+            if [ "$PRERELEASE" = false ]; then echo "$image:latest"; fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Build and publish migrations for linux/amd64 and linux/arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.migrations
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.migration-tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
       - name: Build and publish linux/amd64 and linux/arm64
         uses: docker/build-push-action@v6
         with:
