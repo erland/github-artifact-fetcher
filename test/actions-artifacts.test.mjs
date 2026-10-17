@@ -22,7 +22,7 @@ function service(opts={}){
 }
 test('list artifacts scoped to run and omit untrusted URL',async()=>{
  const r=await service().api.list('github:1','demo/repo',42);
- assert.equal(r.length,1);assert.equal(r[0].id,77);assert.equal(r[0].archive_download_url,'');
+ assert.equal(r.length,1);assert.equal(r[0].id,77);assert.equal(r[0].archive_download_url,'');assert.equal(r[0].githubUrl,'https://github.com/demo/repo/actions/runs/42');
 });
 test('download artifact as verified ZIP with SHA-256 and no token on redirect',async()=>{
  const {api}=service();
