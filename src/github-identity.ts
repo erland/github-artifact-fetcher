@@ -119,7 +119,7 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
   }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
  }
  async publicRepository(owner:string,repo:string):Promise<boolean>{
-  if(!/^[\\w.-]{1,100}$/.test(owner)||!/^[\\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
+  if(!/^[\w.-]{1,100}$/.test(owner)||!/^[\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
   // No caller-supplied URL, credentials, or redirects are accepted.
   const response=await this.fetcher('https://api.github.com/repos/'+encodeURIComponent(owner)+'/'+encodeURIComponent(repo),{
    headers:{accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},
