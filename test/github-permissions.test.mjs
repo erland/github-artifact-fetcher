@@ -63,3 +63,20 @@ test('permanently rejected refresh token removes only the affected connection', 
   await pool.end();
  }
 });
+
+
+test('public repository works without installation but private repository retains installation restriction',async()=>{
+ const calls=[];
+ const identity=new GitHubIdentity({pool:{},clientId:'test',clientSecret:'secret',publicBaseUrl:'https://example.test',encryptionKey:randomBytes(32),fetcher:async(url,options)=>{
+  calls.push({url,auth:options?.headers?.authorization});
+  if(url.endsWith('/repos/public-owner/public-repo'))return new Response(JSON.stringify({id:501,full_name:'public-owner/public-repo',private:false}));
+  if(url.endsWith('/repos/private-owner/private-repo'))return new Response(JSON.stringify({id:502,full_name:'private-owner/private-repo',private:true}));
+  if(url.includes('/user/installations?'))return new Response(JSON.stringify({installations:[]}));
+  throw Error('unexpected '+url);
+ }});
+ identity.tokenFor=async()=> 'user-token';
+ assert.equal(await identity.repositoryAllowed('github:one','public-owner','public-repo'),true);
+ assert.equal(await identity.repositoryAllowed('github:one','private-owner','private-repo'),false);
+ assert.equal(calls.filter(x=>x.url.includes('/repos/public-owner/public-repo')&&!x.auth).length,1);
+ assert.equal(await identity.publicRepository('private-owner','private-repo'),false);
+});
