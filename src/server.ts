@@ -17,12 +17,19 @@ import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:EphemeralFiles,publicBaseUrl:string){
  const handler=createMcpHandler(()=>{
   const server=new McpServer({name:'github-artifact-fetcher',version:'0.10.0-dev010'},{capabilities:{tools:{}}});
-  server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:!!identity,packages:false,liveChatGptHandoff:false,externalOneTimeDownload:true,smallBinaryResource:true,maxResourceBytes:1048576})}]}));
+  server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:!!identity,packages:false,liveChatGptHandoff:false,externalOneTimeDownload:true,smallBinaryResource:true,maxResourceBytes:1048576,smallBinaryTool:true,maxToolBytes:1048576})}]}));
   if(identity){
    server.registerResource('binary-file',new ResourceTemplate('github-artifact-fetcher://files/{id}',{list:undefined}),{title:'Temporary binary file',description:'Owner-scoped binary ZIP, PDF or EPUB; maximum 1 MiB',mimeType:'application/octet-stream'},async(uri,{id})=>{
     const value=files.resource(String(id),user);
     if(!value)throw Error('FILE_NOT_FOUND_OR_EXPIRED');
     return {contents:[{uri:uri.href,mimeType:value.mimeType,blob:value.blob}]};
+   });
+   server.registerTool('read_small_file',{description:'Return a previously fetched small ZIP, PDF or EPUB as embedded binary MCP content (maximum 1 MiB). First use a fetch_* tool and pass its resourceUri. The binary content is not a native ChatGPT attachment.',annotations:{readOnlyHint:true},inputSchema:z.object({resourceUri:z.string().max(160)})},async({resourceUri})=>{
+    const match=/^github-artifact-fetcher:\/\/files\/([a-f0-9]{64})$/.exec(resourceUri);
+    if(!match)throw Error('INVALID_RESOURCE_URI');
+    const value=files.resource(match[1],user);
+    if(!value)throw Error('FILE_NOT_FOUND_OR_EXPIRED_OR_TOO_LARGE');
+    return {content:[{type:'resource' as const,resource:{uri:resourceUri,mimeType:value.mimeType,blob:value.blob}}]};
    });
    const releases=new ReleaseService(identity);
    const actions=new ActionsArtifacts(identity);
