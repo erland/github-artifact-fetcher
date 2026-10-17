@@ -18,7 +18,10 @@ export function validateZip(buf:Buffer):{entries:number;uncompressedBytes:number
   if(!name||name.includes('\\')||name.startsWith('/')||/^[A-Za-z]:/.test(name)||name.split('/').some(x=>x==='..'||x==='.')||name.includes('\0')||seen.has(name))invalid();
   seen.add(name);
   const unixMode=buf.readUInt32LE(cursor+38)>>>16;
-  if((buf.readUInt16LE(cursor+4)>>>8)===3&&unixMode!==0&&((unixMode&0xf000)!==0x8000&&(unixMode&0xf000)!==0x4000))invalid();
+  const hostOS=buf.readUInt16LE(cursor+4)>>>8, fileType=unixMode&0xf000;
+  // Python zipfile may record Unix permissions without file type bits.
+  // Still reject explicit symlinks and other special file types.
+  if(hostOS===3&&fileType!==0&&fileType!==0x8000&&fileType!==0x4000)invalid();
   if(raw>0&&compressed===0||raw>compressed*MAX_RATIO&&raw>1024)throw Error('ZIP_BOMB');
   total+=raw;if(total>MAX_UNCOMPRESSED)throw Error('ZIP_BOMB');
   if(local+30>offset||buf.readUInt32LE(local)!==0x04034b50)invalid();
