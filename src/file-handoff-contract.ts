@@ -2,7 +2,7 @@ import type {EphemeralFiles} from './file-delivery.js';
 import {createHash} from 'node:crypto';
 import type {FileOutput} from './releases.js';
 export type FileFormat='zip'|'pdf'|'epub';
-export type FileHandoff={schemaVersion:1;delivery:'one_time_https_url';nativeAttachment:false;filename:string;mimeType:string;sizeBytes:number;sha256:string;downloadUrl:string;expiresAt:string};
+export type FileHandoff={schemaVersion:1;delivery:'one_time_https_url';nativeAttachment:false;filename:string;mimeType:string;sizeBytes:number;sha256:string;downloadUrl:string;expiresAt:string;resourceUri?:string};
 const formats:Record<FileFormat,string>={zip:'application/zip',pdf:'application/pdf',epub:'application/epub+zip'};
 export function fileFormat(name:string):FileFormat{
  const suffix=/\.([A-Za-z]+)$/.exec(name)?.[1]?.toLowerCase();
@@ -25,7 +25,10 @@ export function handoffContract(file:FileOutput,staged:{url:string;expiresAt:str
  return {schemaVersion:1,delivery:'one_time_https_url',nativeAttachment:false,filename:file.filename,mimeType:file.mimeType,sizeBytes:file.sizeBytes,sha256:file.sha256,downloadUrl:staged.url,expiresAt:staged.expiresAt};
 }
 
-export function stageHandoff(files:EphemeralFiles,file:FileOutput,baseUrl:string):FileHandoff{
+export function stageHandoff(files:EphemeralFiles,file:FileOutput,baseUrl:string,owner?:string):FileHandoff{
  verifyFileForDelivery(file);
- return handoffContract(file,files.stage(file,baseUrl));
+ const staged=files.stage(file,baseUrl,owner);
+ const result=handoffContract(file,staged);
+ if(owner&&file.sizeBytes<=1024*1024)result.resourceUri='github-artifact-fetcher://files/'+new URL(staged.url).pathname.split('/').pop();
+ return result;
 }
