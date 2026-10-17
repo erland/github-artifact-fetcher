@@ -3,7 +3,7 @@ import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './secur
 import {createHash} from 'node:crypto';
 export type ReleaseAsset={id:number;name:string;size:number;content_type:string;digest?:string|null;browser_download_url?:string;githubUrl?:string};
 export type Release={tag_name:string;assets:ReleaseAsset[]};
-export type GitHubCredentials={tokenFor(user:string):Promise<string|null>;repositoryAllowed(user:string,owner:string,repo:string):Promise<boolean>};
+export type GitHubCredentials={tokenFor(user:string):Promise<string|null>;repositoryAllowed(user:string,owner:string,repo:string):Promise<boolean>;publicRepository?(owner:string,repo:string):Promise<boolean>};
 export type FileOutput={filename:string;mimeType:string;sizeBytes:number;sha256:string;dataBase64:string};
 const repoPattern=/^[A-Za-z0-9_.-]{1,100}$/;
 const assetLimit=20*1024*1024;
@@ -16,13 +16,13 @@ export class ReleaseService {
   if(!await this.identity.repositoryAllowed(user,owner,name))throw Error('REPOSITORY_FORBIDDEN');
   const token=await this.identity.tokenFor(user);
   if(!token)throw Error('GITHUB_TOKEN_UNAVAILABLE');
-  return {owner,name,token};
+  return {owner,name,token:await this.identity.publicRepository?.(owner,name)?null:token};
  }
  private async release(user:string,repository:string,tag:string){
   const {owner,name,token}=await this.authorized(user,repository);
   if(!tag||tag.length>200)throw Error('INVALID_TAG');
   const response=await this.fetcher(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases/tags/${encodeURIComponent(tag)}`,{
-   headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
+   headers:{...(token?{Authorization:'Bearer '+token}:{}),Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
   });
   if(!response.ok)throw Error('GITHUB_RELEASE_HTTP_'+response.status);
   const data=await response.json() as Release;
