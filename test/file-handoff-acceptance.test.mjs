@@ -85,3 +85,17 @@ test('expired MCP resources are denied',()=>{
  clock=120001;
  assert.equal(files.resource(id,'github:alice'),null);
 });
+
+test('tool handoff size boundary is exactly 1 MiB and preserves binary',()=>{
+ const files=new EphemeralFiles(()=>0);
+ const make=(n)=>Buffer.concat([zip,Buffer.alloc(n-zip.length)]);
+ const small=file('max.zip','application/zip',make(1024*1024));
+ const handoff=stageHandoff(files,small,'https://artifacts.example.test','github:alice');
+ assert.ok(handoff.resourceUri);
+ const binary=files.resource(handoff.resourceUri.split('/').pop(),'github:alice');
+ assert.equal(Buffer.from(binary.blob,'base64').length,1024*1024);
+ assert.equal(createHash('sha256').update(Buffer.from(binary.blob,'base64')).digest('hex'),handoff.sha256);
+ const large=stageHandoff(files,file('oversized.zip','application/zip',make(1024*1024+1)),'https://artifacts.example.test','github:alice');
+ assert.equal(large.resourceUri,undefined);
+ assert.ok(large.downloadUrl.startsWith('https://'));
+});
