@@ -39,3 +39,15 @@ test('reject ambiguous ZIP prefix and unaccounted local data',()=>{
  padded.writeUInt32LE(central+3,padded.length-22+16);
  assert.throws(()=>validateZip(padded),/INVALID_ZIP/);
 });
+
+
+test('accept Python zipfile permission-only Unix mode but reject explicit symlinks',()=>{
+ const pythonStyle=archive('document.txt',Buffer.from('hello'));
+ const central=pythonStyle.readUInt32LE(pythonStyle.length-22+16);
+ pythonStyle.writeUInt16LE((3<<8)|20,central+4);
+ pythonStyle.writeUInt32LE(0x01800000,central+38); // Unix 0600 with no file type bits
+ assert.deepEqual(validateZip(pythonStyle),{entries:1,uncompressedBytes:5});
+ const symlink=Buffer.from(pythonStyle);
+ symlink.writeUInt32LE(0xa1ff0000,central+38); // Unix symlink 0120777
+ assert.throws(()=>validateZip(symlink),/INVALID_ZIP/);
+});
