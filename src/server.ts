@@ -1,7 +1,7 @@
 import {FixedWindowLimiter,securityHeaders,audit,requestId} from './security.js';
 /** MCP transport and PostgreSQL readiness. GitHub fetching is deferred until DEV-006. */
 import http from 'node:http';
-import {createMcpHandler, McpServer} from '@modelcontextprotocol/server';
+import {createMcpHandler, McpServer, ResourceTemplate} from '@modelcontextprotocol/server';
 import {toNodeHandler} from '@modelcontextprotocol/node';
 import {createDatabaseProbe, databaseConfig, type DatabaseProbe} from './database.js';
 import {OAuth, type PrincipalResolver} from './oauth.js';
@@ -17,16 +17,21 @@ import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:EphemeralFiles,publicBaseUrl:string){
  const handler=createMcpHandler(()=>{
   const server=new McpServer({name:'github-artifact-fetcher',version:'0.10.0-dev010'},{capabilities:{tools:{}}});
-  server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:!!identity,packages:false,liveChatGptHandoff:false,externalOneTimeDownload:true})}]}));
+  server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:!!identity,packages:false,liveChatGptHandoff:false,externalOneTimeDownload:true,smallBinaryResource:true,maxResourceBytes:1048576})}]}));
   if(identity){
+   server.registerResource('binary-file',new ResourceTemplate('github-artifact-fetcher://files/{id}',{list:undefined}),{title:'Temporary binary file',description:'Owner-scoped binary ZIP, PDF or EPUB; maximum 1 MiB',mimeType:'application/octet-stream'},async(uri,{id})=>{
+    const value=files.resource(String(id),user);
+    if(!value)throw Error('FILE_NOT_FOUND_OR_EXPIRED');
+    return {contents:[{uri:uri.href,mimeType:value.mimeType,blob:value.blob}]};
+   });
    const releases=new ReleaseService(identity);
    const actions=new ActionsArtifacts(identity);
    const archives=new RepositoryArchives(identity);
-   server.registerTool('fetch_repository_archive',{description:'Download a repository ZIP at an explicit branch, tag or full commit SHA, with controlled redirect and SHA-256',inputSchema:z.object({repository:z.string(),refKind:z.enum(['branch','tag','commit']),ref:z.string()})},async({repository,refKind,ref})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await archives.download(user,repository,{kind:refKind,value:ref}),publicBaseUrl))}]}));
+   server.registerTool('fetch_repository_archive',{description:'Download a repository ZIP at an explicit branch, tag or full commit SHA, with controlled redirect and SHA-256',inputSchema:z.object({repository:z.string(),refKind:z.enum(['branch','tag','commit']),ref:z.string()})},async({repository,refKind,ref})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await archives.download(user,repository,{kind:refKind,value:ref}),publicBaseUrl,user))}]}));
    server.registerTool('list_workflow_artifacts',{description:'List GitHub Actions artifacts scoped to a workflow run',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive()})},async({repository,runId})=>({content:[{type:'text',text:JSON.stringify(await actions.list(user,repository,runId))}]}));
-   server.registerTool('fetch_workflow_artifact',{description:'Fetch a workflow-run artifact as a one-use HTTPS handoff descriptor with SHA-256 (not a native ChatGPT attachment)',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive(),artifactId:z.number().int().positive()})},async({repository,runId,artifactId})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await actions.download(user,repository,runId,artifactId),publicBaseUrl))}]}));
+   server.registerTool('fetch_workflow_artifact',{description:'Fetch a workflow-run artifact as a one-use HTTPS handoff descriptor with SHA-256 (not a native ChatGPT attachment)',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive(),artifactId:z.number().int().positive()})},async({repository,runId,artifactId})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await actions.download(user,repository,runId,artifactId),publicBaseUrl,user))}]}));
    server.registerTool('list_release_assets',{description:'List GitHub release assets for a tag',inputSchema:z.object({repository:z.string(),tag:z.string()})},async({repository,tag})=>({content:[{type:'text',text:JSON.stringify(await releases.list(user,repository,tag))}]}));
-   server.registerTool('fetch_release_asset',{description:'Fetch a GitHub release asset, returning a versioned one-use HTTPS handoff descriptor, not a native ChatGPT attachment',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await releases.fetch(user,repository,tag,assetName),publicBaseUrl))}]}));
+   server.registerTool('fetch_release_asset',{description:'Fetch a GitHub release asset, returning a versioned one-use HTTPS handoff descriptor, not a native ChatGPT attachment',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await releases.fetch(user,repository,tag,assetName),publicBaseUrl,user))}]}));
   }
   return server;
  });
