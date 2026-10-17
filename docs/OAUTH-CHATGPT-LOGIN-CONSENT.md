@@ -13,3 +13,7 @@ A signed resume cookie is validated against the application's encryption key; in
 6. Verify in a real ChatGPT browser context after a new GHCR release; local CI cannot reproduce ChatGPT's embedded browser cookie behavior.
 
 No production deploy or live OAuth credentials were used in this change.
+
+## Installationsguide för ChatGPT
+
+Se [`CHATGPT-MCP-INSTALLATION.md`](CHATGPT-MCP-INSTALLATION.md) för MCP-namn, beskrivning, OAuth-inställningar, anslutning och felsökning.
