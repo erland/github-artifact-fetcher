@@ -38,6 +38,9 @@ test('OAuth discovery, PKCE, protected MCP, refresh rotation and replay denial',
   const authResponse=await fetch(authorize,{redirect:'manual'});
   assert.equal(authResponse.status,200);
   const consentCookie=authResponse.headers.get('set-cookie').split(';')[0];
+  const consentCsp=authResponse.headers.get('content-security-policy');
+  assert.match(consentCsp,/form-action 'self' https:\/\/client\.example\.test;/);
+  assert.doesNotMatch(consentCsp,/form-action \*|form-action 'self';/);
   const page=await authResponse.text();
   assert.match(page,/<style>/);
   assert.match(authResponse.headers.get('set-cookie'),/SameSite=Lax/);
