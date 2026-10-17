@@ -42,7 +42,10 @@ test('GitHub App OAuth state, encrypted tokens, refresh rotation and repository 
   assert.equal(rows.rows[0].encrypted_token.includes(Buffer.from('original-access')),false);
   assert.equal(await identity.repositoryAllowed('github:123456','erland','allowed'),true);
   assert.equal(await identity.repositoryAllowed('github:123456','erland','denied'),false);
-  assert.equal(refreshed,1);assert.equal(repoCalls,2);
+  assert.equal(refreshed,1);
+  // Each repository lookup checks public visibility without credentials before
+  // falling back to GitHub App installation permissions for private access.
+  assert.equal(repoCalls,4);
   assert.equal(await identity.repositoryAllowed('github:123456','../evil','allowed'),false);
   assert.equal(await identity.repositoryAllowed('github:other','erland','allowed'),false);
   assert.equal(await identity.tokenFor('nonexistent'),null);
