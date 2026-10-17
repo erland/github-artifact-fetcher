@@ -1,7 +1,7 @@
 import {validateZip} from './zip-validation.js';
 import {safeDownloadRedirect,safeContentLength,safeResponseStatus} from './security.js';
 import {createHash} from 'node:crypto';
-export type ReleaseAsset={id:number;name:string;size:number;content_type:string;digest?:string|null;browser_download_url?:string};
+export type ReleaseAsset={id:number;name:string;size:number;content_type:string;digest?:string|null;browser_download_url?:string;githubUrl?:string};
 export type Release={tag_name:string;assets:ReleaseAsset[]};
 export type GitHubCredentials={tokenFor(user:string):Promise<string|null>;repositoryAllowed(user:string,owner:string,repo:string):Promise<boolean>};
 export type FileOutput={filename:string;mimeType:string;sizeBytes:number;sha256:string;dataBase64:string};
@@ -30,8 +30,8 @@ export class ReleaseService {
   return {data,token,owner,name};
  }
  async list(user:string,repository:string,tag:string):Promise<ReleaseAsset[]>{
-  const {data}=await this.release(user,repository,tag);
-  return data.assets.filter(a=>Number.isSafeInteger(a.id)&&typeof a.name==='string').map(a=>({id:a.id,name:a.name,size:a.size,content_type:a.content_type,digest:a.digest}));
+  const {data,owner,name}=await this.release(user,repository,tag);
+  return data.assets.filter(a=>Number.isSafeInteger(a.id)&&typeof a.name==='string').map(a=>({id:a.id,name:a.name,size:a.size,content_type:a.content_type,digest:a.digest,githubUrl:`https://github.com/${owner}/${name}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(a.name)}`}));
  }
  async fetch(user:string,repository:string,tag:string,assetName:string):Promise<FileOutput>{
   const {data,token,owner,name}=await this.release(user,repository,tag);
