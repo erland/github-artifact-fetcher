@@ -1,0 +1,31 @@
+name: Live download handoff acceptance
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check required private handoff descriptor
+        env:
+          HANDOFF: ${{ secrets.GHAF_E2E_HANDOFF_JSON }}
+        run: |
+          if [ -z "$HANDOFF" ]; then
+            echo "::error::Set the GHAF_E2E_HANDOFF_JSON GitHub Actions secret to a freshly generated MCP descriptor."
+            exit 1
+          fi
+          printf '%s' "$HANDOFF" > "$RUNNER_TEMP/handoff.json"
+          chmod 600 "$RUNNER_TEMP/handoff.json"
+      - name: Validate production HTTPS download and replay
+        env:
+          GHAF_HANDOFF_FILE: ${{ runner.temp }}/handoff.json
+          GHAF_EXPECTED_ORIGIN: https://github-artifact-fetcher.apphome.one
+        run: node scripts/test-live-handoff.mjs
