@@ -62,7 +62,7 @@ export class OAuth {
    const state=q.get('state')??'',challenge=q.get('code_challenge')??'';
    if(q.get('response_type')!=='code'||q.get('code_challenge_method')!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(challenge)||q.get('scope')!=='mcp'||q.get('resource')!==this.resource||state.length<8||state.length>512)return error(res,400,'invalid_request'),true;
    const user=await this.config.principal(req);
-   if(!user)return error(res,401,'login_required'),true;
+   if(!user){res.writeHead(302,{'location':'/auth/github/start?return_to='+encodeURIComponent(url.pathname+url.search),'cache-control':'no-store'});res.end();return true;}
    // Bind consent to the exact reviewed request and the logged-in subject.
    const request=secret(),csrf=secret();
    await this.config.pool.query(`INSERT INTO mcp_oauth_consent_requests
@@ -70,8 +70,8 @@ export class OAuth {
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [hash(request),hash(csrf),user,client,redirect,state,challenge,'mcp',this.resource,new Date(this.now()+300000)]);
    const escapeHtml=(v:string)=>v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
-   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; form-action 'self'; base-uri 'none'",'set-cookie':`ghaf_consent=${request}; HttpOnly; Secure; SameSite=Strict; Path=/authorize; Max-Age=300`});
-   res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Authorize MCP</title></head><body><h1>Authorize GitHub Artifact Fetcher</h1><p>Allow client ${escapeHtml(client)} to access your GitHub artifacts through MCP?</p><p>Redirect: ${escapeHtml(redirect)}</p><form action="/authorize" method="post"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="request" value="${request}"><button type="submit" name="decision" value="approve">Approve</button><button type="submit" name="decision" value="deny">Deny</button></form></body></html>`);return true;
+   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'",'set-cookie':`ghaf_consent=${request}; HttpOnly; Secure; SameSite=Lax; Path=/authorize; Max-Age=300`});
+   res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize MCP</title><style>body{font:16px system-ui,-apple-system,sans-serif;background:#f8fafc;color:#172033;margin:0;padding:36px 16px}main{max-width:520px;margin:6vh auto;background:white;border:1px solid #dbe2ea;border-radius:14px;padding:28px;box-shadow:0 8px 28px #17203312}h1{font-size:24px;margin-top:0}p{line-height:1.5;overflow-wrap:anywhere}button{font:inherit;border:1px solid #c9d1dc;background:#fff;border-radius:8px;padding:11px 19px;margin:8px 8px 0 0;cursor:pointer}button[value=approve]{background:#153b73;color:white;border-color:#153b73}</style></head><body><main><h1>Authorize GitHub Artifact Fetcher</h1><p>Allow client ${escapeHtml(client)} to access your GitHub artifacts through MCP?</p><p>Redirect: ${escapeHtml(redirect)}</p><form action="/authorize" method="post"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="request" value="${request}"><button type="submit" name="decision" value="approve">Approve</button><button type="submit" name="decision" value="deny">Deny</button></form></main></body></html>`);return true;
   }
   if(req.method==='POST'&&path==='/authorize'){
    let q:URLSearchParams;try{q=await form(req);}catch{return error(res,400,'invalid_request'),true;}
@@ -102,7 +102,7 @@ export class OAuth {
     target.searchParams.set('state',reviewed.state);
     await db.query('COMMIT');
     res.writeHead(302,{'location':target.toString(),'cache-control':'no-store'});res.end();
-   }catch{await db.query('ROLLBACK');error(res,403,'invalid_consent');}
+   }catch(e){await db.query('ROLLBACK');console.warn('oauth.consent.failed',{reason:(e as Error).message==='invalid_consent'?'invalid_consent':'database_or_internal_error'});error(res,403,'invalid_consent');}
    finally{db.release();}
    return true;
   }
