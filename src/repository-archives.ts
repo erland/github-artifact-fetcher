@@ -19,7 +19,7 @@ export class RepositoryArchives {
   const resolved=await this.resolve(user,repository,ref);
   return {githubUrl:`https://github.com/${resolved.owner}/${resolved.name}/archive/${resolved.sha}.zip`,repository,refKind:ref.kind,ref:ref.value,commitSha:resolved.sha};
  }
- private async resolve(user:string,repository:string,ref:ArchiveRef):Promise<{owner:string;name:string;token:string;sha:string;apiBase:string}>{
+ private async resolve(user:string,repository:string,ref:ArchiveRef):Promise<{owner:string;name:string;token:string|null;sha:string;apiBase:string}>{
 
   const parts=repository.split('/');
   if(parts.length!==2||!parts.every(x=>repositoryPart.test(x)&&x!=='.'&&x!=='..'))throw Error('INVALID_REPOSITORY');
@@ -32,7 +32,7 @@ export class RepositoryArchives {
   const apiBase=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   const lookup=ref.kind==='commit'?`git/commits/${encodeURIComponent(ref.value)}`:`git/ref/${[ref.kind==='branch'?'heads':'tags',...ref.value.split('/')].map(encodeURIComponent).join('/')}`;
   const info=await this.fetcher(`${apiBase}/${lookup}`,{
-   headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
+   headers:{...(token?{authorization:'Bearer '+token}:{}),accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
   });
   if(!info.ok)throw Error('REF_LOOKUP_HTTP_'+info.status);
   const metadata=await info.json() as {sha?:string;object?:{sha?:string;type?:string}};
@@ -41,7 +41,7 @@ export class RepositoryArchives {
    const tagSha=metadata.object.sha;
    if(!tagSha||!hexCommit.test(tagSha))throw Error('INVALID_RESOLVED_TAG');
    const tagResponse=await this.fetcher(`${apiBase}/git/tags/${tagSha}`,{
-    headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
+    headers:{...(token?{authorization:'Bearer '+token}:{}),accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(15000)
    });
    if(!tagResponse.ok)throw Error('TAG_LOOKUP_HTTP_'+tagResponse.status);
    const tag=await tagResponse.json() as {object?:{sha?:string;type?:string}};
@@ -49,12 +49,12 @@ export class RepositoryArchives {
    sha=tag.object.sha;
   }
   if(!sha||!hexCommit.test(sha))throw Error('INVALID_RESOLVED_COMMIT');
-  return {owner,name,token,sha,apiBase};
+  return {owner,name,token:await this.identity.publicRepository?.(owner,name)?null:token,sha,apiBase};
  }
  async download(user:string,repository:string,ref:ArchiveRef):Promise<FileOutput>{
   const {name,token,sha,apiBase}=await this.resolve(user,repository,ref);
   const url=`${apiBase}/zipball/${sha}`;
-  let response=await this.fetcher(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
+  let response=await this.fetcher(url,{headers:{...(token?{authorization:'Bearer '+token}:{}),accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
   if([302,307].includes(response.status)){
    const raw=response.headers.get('location');
    if(!raw)throw Error('MISSING_REDIRECT');

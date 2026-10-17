@@ -118,9 +118,22 @@ ON CONFLICT(user_subject) DO UPDATE SET github_user_id=EXCLUDED.github_user_id,e
    await db.query('COMMIT');
   }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
  }
+ async publicRepository(owner:string,repo:string):Promise<boolean>{
+  if(!/^[\w.-]{1,100}$/.test(owner)||!/^[\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
+  // No caller-supplied URL, credentials, or redirects are accepted.
+  const response=await this.fetcher('https://api.github.com/repos/'+encodeURIComponent(owner)+'/'+encodeURIComponent(repo),{
+   headers:{accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},
+   redirect:'manual',signal:AbortSignal.timeout(12000)
+  });
+  if(response.status!==200)return false;
+  const item=await response.json() as {id?:number;full_name?:string;private?:boolean};
+  return Number.isSafeInteger(item.id)&&Number(item.id)>0&&
+   item.full_name?.toLowerCase()===(owner+'/'+repo).toLowerCase()&&item.private===false;
+ }
  async repositoryAllowed(user:string,owner:string,repo:string):Promise<boolean>{
   if(!/^[\w.-]{1,100}$/.test(owner)||!/^[\w.-]{1,100}$/.test(repo)||owner==='..'||repo==='..')return false;
   const token=await this.tokenFor(user);if(!token)return false;
+  if(await this.publicRepository(owner,repo))return true;
   const headers={authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'};
   const get=async(url:string)=>{
    const response=await this.fetcher(url,{headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
