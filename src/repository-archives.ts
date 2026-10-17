@@ -15,7 +15,12 @@ function validRef(ref:ArchiveRef):void {
 function zipSignature(bytes:Buffer):boolean{return bytes.length>=4&&bytes[0]===80&&bytes[1]===75&&((bytes[2]===3&&bytes[3]===4)||(bytes[2]===5&&bytes[3]===6)||(bytes[2]===7&&bytes[3]===8));}
 export class RepositoryArchives {
  constructor(private readonly identity:GitHubCredentials,private readonly fetcher:typeof fetch=fetch){}
- async download(user:string,repository:string,ref:ArchiveRef):Promise<FileOutput>{
+ async link(user:string,repository:string,ref:ArchiveRef):Promise<{githubUrl:string;repository:string;refKind:string;ref:string;commitSha:string}>{
+  const resolved=await this.resolve(user,repository,ref);
+  return {githubUrl:`https://github.com/${resolved.owner}/${resolved.name}/archive/${resolved.sha}.zip`,repository,refKind:ref.kind,ref:ref.value,commitSha:resolved.sha};
+ }
+ private async resolve(user:string,repository:string,ref:ArchiveRef):Promise<{owner:string;name:string;token:string;sha:string;apiBase:string}>{
+
   const parts=repository.split('/');
   if(parts.length!==2||!parts.every(x=>repositoryPart.test(x)&&x!=='.'&&x!=='..'))throw Error('INVALID_REPOSITORY');
   validRef(ref);
@@ -44,6 +49,10 @@ export class RepositoryArchives {
    sha=tag.object.sha;
   }
   if(!sha||!hexCommit.test(sha))throw Error('INVALID_RESOLVED_COMMIT');
+  return {owner,name,token,sha,apiBase};
+ }
+ async download(user:string,repository:string,ref:ArchiveRef):Promise<FileOutput>{
+  const {name,token,sha,apiBase}=await this.resolve(user,repository,ref);
   const url=`${apiBase}/zipball/${sha}`;
   let response=await this.fetcher(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
   if([302,307].includes(response.status)){
