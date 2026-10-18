@@ -43,3 +43,38 @@ test('release ZIP rejects invalid central directory even when SHA-256 matches',a
  const malformed=Buffer.from([80,75,3,4,0,0,0,0]);
  await assert.rejects(service({name:'sample.zip',contentType:'application/zip',payload:malformed}).fetch('github:1','example/demo','v1','sample.zip'),/INVALID_ZIP/);
 });
+
+test('public release downloads PDF and EPUB without ever sending GitHub credentials',async()=>{
+ for(const [filename,mime,payload] of [
+  ['book.pdf','application/pdf',Buffer.from('%PDF-1.7\\npublic fixture')],
+  ['book.epub','application/epub+zip',Buffer.from('PK\\x03\\x04public fixture')]
+ ]){
+  const hash=createHash('sha256').update(payload).digest('hex');
+  const called=[];
+  const publicIdentity={repositoryAllowed:async()=>true,tokenFor:async()=> 'secret-token',publicRepository:async()=>true};
+  const fetcher=async(url,init)=>{
+   called.push({url,headers:init.headers});
+   if(url.endsWith('/releases/tags/v1'))return new Response(JSON.stringify({assets:[{id:87,name:filename,size:payload.length,content_type:mime,digest:'sha256:'+hash}]}));
+   if(url===`https://github.com/example/demo/releases/download/v1/${filename}`)return new Response(null,{status:302,headers:{location:'https://release-assets.githubusercontent.com/download/public-fixture'}});
+   if(url==='https://release-assets.githubusercontent.com/download/public-fixture')return new Response(payload);
+   throw Error('unexpected URL '+url);
+  };
+  const x=await new ReleaseService(publicIdentity,fetcher).fetch('github:1','example/demo','v1',filename);
+  assert.equal(x.sha256,hash);
+  assert.deepEqual(Buffer.from(x.dataBase64,'base64'),payload);
+  assert.equal(called.some(c=>c.url.includes('/releases/assets/87')),false);
+  assert.equal(called.every(c=>!c.headers?.Authorization&&!c.headers?.authorization),true);
+ }
+});
+
+test('public release rejects unsafe redirect and mismatched checksum',async()=>{
+ const identity={repositoryAllowed:async()=>true,tokenFor:async()=> 'secret',publicRepository:async()=>true};
+ const asset={id:87,name:'book.pdf',size:8,content_type:'application/pdf',digest:'sha256:'+'0'.repeat(64)};
+ const make=redirect=>new ReleaseService(identity,async(url)=>{
+  if(url.endsWith('/releases/tags/v1'))return new Response(JSON.stringify({assets:[asset]}));
+  if(url.startsWith('https://github.com/'))return new Response(null,{status:302,headers:{location:redirect}});
+  return new Response(Buffer.from('%PDF-1.7'));
+ });
+ await assert.rejects(make('https://evil.example/attack').fetch('github:1','example/demo','v1','book.pdf'),/UNTRUSTED_REDIRECT/);
+ await assert.rejects(make('https://release-assets.githubusercontent.com/file').fetch('github:1','example/demo','v1','book.pdf'),/CHECKSUM_MISMATCH/);
+});
