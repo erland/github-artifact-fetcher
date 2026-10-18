@@ -13,12 +13,40 @@ import {RepositoryArchives} from './repository-archives.js';
 import {EphemeralFiles} from './file-delivery.js';
 import {stageHandoff} from './file-handoff-contract.js';
 import {GitHubWebhooks} from './github-webhooks.js';
+import {LIBRARY_UPLOAD_WIDGET_URI,libraryUploadWidgetHtml} from './library-upload-widget.js';
 import * as z from 'zod/v4';
 function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:EphemeralFiles,publicBaseUrl:string){
  const handler=createMcpHandler(()=>{
   const server=new McpServer({name:'github-artifact-fetcher',version:'0.10.0-dev010'},{capabilities:{tools:{}}});
   server.registerTool('get_capabilities',{description:'Current supported sources',annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:undefined},async()=>({content:[{type:'text',text:JSON.stringify({release:!!identity,actions:!!identity,repository:!!identity,packages:false,liveChatGptHandoff:false,externalOneTimeDownload:true,smallBinaryResource:true,maxResourceBytes:5242880,smallBinaryTool:true,maxToolBytes:5242880})}]}));
   if(identity){
+   // An MCP App UI experiment: transfer bytes through the widget's network
+   // request, not through the model-visible MCP result. No automatic upload.
+   server.registerResource('library-upload-widget',LIBRARY_UPLOAD_WIDGET_URI,
+    {mimeType:'text/html;profile=mcp-app',description:'Experimental ChatGPT Library file upload'},
+    async()=>({contents:[{uri:LIBRARY_UPLOAD_WIDGET_URI,mimeType:'text/html;profile=mcp-app',
+     text:libraryUploadWidgetHtml,
+     _meta:{ui:{csp:{connectDomains:[new URL(publicBaseUrl).origin],resourceDomains:[]}},
+       'openai/widgetDescription':'Experimental user-initiated upload to ChatGPT Library. GitHub download remains the fallback.'}
+    }]}));
+   server.registerTool('prepare_library_upload',
+    {description:'EXPERIMENTAL: Prepare a public or authorized private GitHub release asset for a user-initiated ChatGPT Library upload widget. Does not transfer file bytes via MCP; the user must click Save and the host may not support this. Otherwise use list_release_assets and manual attachment.',
+     inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()}),
+     _meta:{'openai/outputTemplate':LIBRARY_UPLOAD_WIDGET_URI,ui:{resourceUri:LIBRARY_UPLOAD_WIDGET_URI}}},
+    async({repository,tag,assetName})=>{
+      const releases=new ReleaseService(identity);
+      const assets=await releases.list(user,repository,tag);
+      const match=assets.find(a=>a.name===assetName);
+      if(!match)throw Error('ASSET_NOT_FOUND');
+      const staged=stageHandoff(files,await releases.fetch(user,repository,tag,assetName),publicBaseUrl,user);
+      const githubUrl=match.githubUrl;
+      const structuredContent={filename:staged.filename,mimeType:staged.mimeType,
+       sizeBytes:staged.sizeBytes,sha256:staged.sha256,downloadUrl:staged.downloadUrl,
+       expiresAt:staged.expiresAt,githubUrl};
+      return {structuredContent,content:[{type:'text' as const,
+       text:JSON.stringify({filename:staged.filename,sizeBytes:staged.sizeBytes,sha256:staged.sha256,
+        expiresAt:staged.expiresAt,githubUrl,requiresUserClick:true,nativeAttachment:false})}]};
+    });
    server.registerResource('binary-file',new ResourceTemplate('github-artifact-fetcher://files/{id}',{list:undefined}),{title:'Temporary binary file',description:'Owner-scoped binary ZIP, PDF or EPUB; maximum 5 MiB',mimeType:'application/octet-stream'},async(uri,{id})=>{
     const value=files.resource(String(id),user);
     if(!value)throw Error('FILE_NOT_FOUND_OR_EXPIRED');
@@ -73,6 +101,13 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
    await webhook.handle(req,res);return;
   }
   if(req.method==='GET'&&path.startsWith('/downloads/')){
+   // A random one-use URL is the capability. Credentials/cookies are never
+   // accepted by the widget; restrict CORS to the ChatGPT widget sandbox.
+   const origin=req.headers.origin;
+   if(origin==='https://web-sandbox.oaiusercontent.com'){
+    res.setHeader('access-control-allow-origin',origin);
+    res.setHeader('vary','Origin');
+   }
    if(!files.serve(path.slice('/downloads/'.length),res))return json(res,404,{error:'FILE_NOT_FOUND_OR_EXPIRED'});
    return;
   }
