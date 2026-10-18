@@ -31,3 +31,18 @@ test('total memory budget and HTTPS-origin enforcement',()=>{
  assert.throws(()=>files.stage(sample,'https://download.example.test'),/FILE_CAPACITY_EXCEEDED/);
  assert.throws(()=>new EphemeralFiles().stage(sample,'http://localhost:3000'),/INVALID_DOWNLOAD_ORIGIN/);
 });
+
+test('MCP resource allows 256 KiB and rejects anything larger',()=>{
+ const bytes=Buffer.alloc(256*1024,65);
+ const sha=createHash('sha256').update(bytes).digest('hex');
+ const file={filename:'small.pdf',mimeType:'application/pdf',sizeBytes:bytes.length,sha256:sha,dataBase64:bytes.toString('base64')};
+ const files=new EphemeralFiles(()=>0);
+ const staged=files.stage(file,'https://download.example.test','reader');
+ const id=new URL(staged.url).pathname.split('/').pop();
+ assert.equal(files.resource(id,'reader')?.sizeBytes,256*1024);
+ assert.equal(files.resource(id,'another-user'),null);
+ const big=Buffer.alloc(256*1024+1,65);
+ const bigger={...file,sizeBytes:big.length,sha256:createHash('sha256').update(big).digest('hex'),dataBase64:big.toString('base64')};
+ const stagedBig=files.stage(bigger,'https://download.example.test','reader');
+ assert.equal(files.resource(new URL(stagedBig.url).pathname.split('/').pop(),'reader'),null);
+});
