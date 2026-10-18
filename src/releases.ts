@@ -39,8 +39,13 @@ export class ReleaseService {
   if(candidates.length!==1||!Number.isSafeInteger(candidates[0].id))throw Error('ASSET_NOT_FOUND');
   const asset=candidates[0];
   if(!Number.isSafeInteger(asset.size)||asset.size<0||asset.size>assetLimit)throw Error('ASSET_TOO_LARGE');
-  const url=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases/assets/${asset.id}`;
-  let response=await this.fetcher(url,{headers:{Authorization:'Bearer '+token,Accept:'application/octet-stream','X-GitHub-Api-Version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
+  // The public GitHub Releases browser endpoint serves asset bytes without a token.
+  // Keep the authenticated GitHub API endpoint exclusively for private repositories.
+  const isPublic=token===null;
+  const url=isPublic
+   ? `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(asset.name)}`
+   : `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases/assets/${asset.id}`;
+  let response=await this.fetcher(url,{headers:isPublic?{}:{Authorization:'Bearer '+token,Accept:'application/octet-stream','X-GitHub-Api-Version':'2022-11-28'},redirect:'manual',signal:AbortSignal.timeout(30000)});
   // GitHub asset binary API can redirect to a temporary signed object URL. Never forward the bearer token.
   if(response.status===302||response.status===307){
    const location=response.headers.get('location');
