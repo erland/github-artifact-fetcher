@@ -30,19 +30,23 @@ export const libraryUploadWidgetHtml = `<!doctype html>
   }
   button.addEventListener('click',async()=>{
     button.disabled=true;status.textContent='Hämtar filen…';
+    let phase='nedladdning';
     try{
       const u=new URL(item.downloadUrl);
       if(u.protocol!=='https:')throw Error('Otrygg nedladdningsadress');
+      if(item.expiresAt&&Date.now()>=Date.parse(item.expiresAt))throw Error('Länken har gått ut. Förbered filen igen.');
       const response=await fetch(u.toString(),{credentials:'omit',redirect:'error',cache:'no-store'});
       if(!response.ok)throw Error('Nedladdning misslyckades ('+response.status+')');
+      phase='mottagning av fil';
       const blob=await response.blob();
       if(blob.size!==item.sizeBytes)throw Error('Filstorleken stämmer inte');
+      phase='uppladdning till biblioteket';
       const file=new File([blob],item.filename,{type:item.mimeType});
       status.textContent='Sparar filen i ChatGPT-biblioteket…';
       const result=await host.uploadFile(file,{library:true});
       if(!result||typeof result.fileId!=='string')throw Error('Inget fil-ID returnerades');
       status.textContent='Uppladdning rapporterad av ChatGPT. Fil-ID: '+result.fileId+'. Kontrollera att filen syns i biblioteket.';
-    }catch(error){status.textContent=String(error&&error.message||error)+'. Du kan använda GitHub-länken i stället.';}
+    }catch(error){status.textContent='Fel vid '+phase+': '+String(error&&error.message||error)+'. Kontrollera nätverk/CORS/CSP eller använd GitHub-länken.';}
     finally{button.disabled=false;}
   });
 })();

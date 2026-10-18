@@ -79,7 +79,10 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
  const dbAvailable=!!process.env.DATABASE_URL||['DB_HOST','DB_NAME','DB_USER','DB_PASSWORD'].every(key=>!!process.env[key]);
  const poolOptions=dbAvailable?databaseConfig():undefined;
  const webhook=poolOptions&&process.env.GITHUB_WEBHOOK_SECRET?new GitHubWebhooks(new Pool({...poolOptions,max:5}),process.env.GITHUB_WEBHOOK_SECRET):undefined;
- const files=new EphemeralFiles();
+ const ttlSeconds=Number(process.env.WIDGET_DOWNLOAD_TTL_SECONDS??120);
+ if(!Number.isSafeInteger(ttlSeconds)||ttlSeconds<120||ttlSeconds>900)throw Error('INVALID_WIDGET_DOWNLOAD_TTL');
+ const files=new EphemeralFiles(Date.now,16,ttlSeconds*1000);
+ const diagnosticOpenCors=process.env.WIDGET_DOWNLOAD_CORS_ANY_ORIGIN==='true';
  const publicBaseUrl=process.env.PUBLIC_BASE_URL??'https://localhost';
  if(process.env.NODE_ENV==='production'){
   const base=new URL(publicBaseUrl);
@@ -100,15 +103,24 @@ export function createServer(options:{database?:DatabaseProbe;oauth?:OAuth;ident
    if(!webhook)return json(res,503,{error:'WEBHOOK_NOT_CONFIGURED'});
    await webhook.handle(req,res);return;
   }
-  if(req.method==='GET'&&path.startsWith('/downloads/')){
-   // A random one-use URL is the capability. Credentials/cookies are never
-   // accepted by the widget; restrict CORS to the ChatGPT widget sandbox.
+  if(path.startsWith('/downloads/')&&(req.method==='GET'||req.method==='OPTIONS')){
    const origin=req.headers.origin;
-   if(origin==='https://web-sandbox.oaiusercontent.com'){
-    res.setHeader('access-control-allow-origin',origin);
+   const allowed=diagnosticOpenCors||origin==='https://web-sandbox.oaiusercontent.com';
+   if(allowed&&origin){
+    res.setHeader('access-control-allow-origin',diagnosticOpenCors?'*':origin);
     res.setHeader('vary','Origin');
    }
-   if(!files.serve(path.slice('/downloads/'.length),res))return json(res,404,{error:'FILE_NOT_FOUND_OR_EXPIRED'});
+   res.setHeader('access-control-expose-headers','x-checksum-sha256, x-download-diagnostic');
+   const id=path.slice('/downloads/'.length);
+   if(req.method==='OPTIONS'){
+    if(!allowed)return json(res,403,{error:'ORIGIN_NOT_ALLOWED'});
+    res.writeHead(204,{'access-control-allow-methods':'GET, OPTIONS','access-control-allow-headers':'content-type','access-control-max-age':'300'});res.end();
+    audit('widget_download',rid,'preflight_allowed');return;
+   }
+   const served=files.serve(id,res);
+   // No bearer token, file bytes, capability ID or raw URL in logs.
+   audit('widget_download',rid,served?'served': 'not_found_or_expired');
+   if(!served)return json(res,404,{error:'FILE_NOT_FOUND_OR_EXPIRED'});
    return;
   }
   if(req.method==='GET'&&path==='/health')return json(res,200,{status:'ok',version:'0.10.0-dev010'});
