@@ -20,3 +20,12 @@ test('widget distinguishes upload receipt from Library verification',()=>{
  assert.match(libraryUploadWidgetHtml,/Bibliotekslagring är inte verifierad/);
  assert.doesNotMatch(libraryUploadWidgetHtml,/Uppladdning rapporterad av ChatGPT/);
 });
+
+test('readback verifies actual bytes, size and SHA-256 independently of Library visibility',()=>{
+ assert.match(libraryUploadWidgetHtml,/crypto\.subtle\.digest\('SHA-256',bytes\)/);
+ assert.match(libraryUploadWidgetHtml,/bytes\.size!==item\.sizeBytes/);
+ assert.match(libraryUploadWidgetHtml,/hash\.toLowerCase\(\)!==item\.sha256\.toLowerCase\(\)/);
+ assert.match(libraryUploadWidgetHtml,/verifyReadback\(readback\.downloadUrl\)/);
+ assert.match(libraryUploadWidgetHtml,/Integritet verifierad/);
+ assert.match(libraryUploadWidgetHtml,/Bibliotekslagring är fortfarande inte verifierad/);
+});
