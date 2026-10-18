@@ -29,3 +29,10 @@ test('readback verifies actual bytes, size and SHA-256 independently of Library 
  assert.match(libraryUploadWidgetHtml,/Integritet verifierad/);
  assert.match(libraryUploadWidgetHtml,/Bibliotekslagring är fortfarande inte verifierad/);
 });
+
+test('conversation handoff is explicit and does not claim an attachment',()=>{
+ assert.match(libraryUploadWidgetHtml,/sendFollowUpMessage/);
+ assert.match(libraryUploadWidgetHtml,/Testa i konversationen/);
+ assert.match(libraryUploadWidgetHtml,/Ingen fil är bifogad automatiskt/);
+ assert.match(libraryUploadWidgetHtml,/Detta bifogar inte filen/);
+});

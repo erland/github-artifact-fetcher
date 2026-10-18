@@ -8,7 +8,7 @@ export const libraryUploadWidgetHtml = `<!doctype html>
 </head><body>
 <h3>Spara GitHub-fil i ChatGPT-biblioteket (experiment)</h3>
 <p id="details">Filen hämtas separat från MCP-konversationen. Tryck för att prova.</p>
-<button id="save" type="button">Spara i biblioteket</button> <button id="verify" type="button" disabled>Kontrollera biblioteket</button>
+<button id="save" type="button">Spara i biblioteket</button> <button id="verify" type="button" disabled>Kontrollera biblioteket</button> <button id="handoff" type="button" disabled>Testa i konversationen</button>
 <p id="status" role="status" aria-live="polite"></p>
 <p id="fallback"></p>
 <script>
@@ -16,7 +16,7 @@ export const libraryUploadWidgetHtml = `<!doctype html>
   const host=window.openai;
   const output=host&&host.toolOutput;
   const item=output&&typeof output==='object'?(output.structuredContent||output):null;
-  const button=document.getElementById('save'),verifyButton=document.getElementById('verify'),status=document.getElementById('status');
+  const button=document.getElementById('save'),verifyButton=document.getElementById('verify'),handoffButton=document.getElementById('handoff'),status=document.getElementById('status');
   let uploadedId=null;
   async function sha256Hex(blob){
     if(!globalThis.crypto?.subtle)throw Error('SHA-256 stöds inte i denna klient');
@@ -58,6 +58,19 @@ export const libraryUploadWidgetHtml = `<!doctype html>
       status.textContent=match?'Filen hittades via biblioteksväljaren: '+item.filename+'.':'Valda biblioteksfiler matchade inte '+item.filename+'.';
     }catch(e){status.textContent='Bibliotekskontroll misslyckades: '+String(e&&e.message||e);}
   });
+  handoffButton.addEventListener('click',async()=>{
+    if(!uploadedId||typeof host?.sendFollowUpMessage!=='function')return;
+    handoffButton.disabled=true;
+    try{
+      // Only a prompt/reference is sent; it is not an attachment and does not
+      // transfer file bytes. The follow-up determines whether the model can use it.
+      await host.sendFollowUpMessage({prompt:'Experiment: Kan du öppna och läsa den PDF som MCP App laddade upp med fil-ID '+uploadedId+' (filnamn '+item.filename+') via dina vanliga filverktyg? Kontrollera faktisk åtkomst, säg tydligt om det inte fungerar. Ingen fil är bifogad automatiskt.'});
+      status.textContent='Testfråga skickad till konversationen. Detta bifogar inte filen; ChatGPT behöver kontrollera åtkomsten.';
+    }catch(error){
+      status.textContent='Det gick inte att skicka testfrågan: '+String(error&&error.message||error);
+      handoffButton.disabled=false;
+    }
+  });
   button.addEventListener('click',async()=>{
     button.disabled=true;status.textContent='Hämtar filen…';
     let phase='nedladdning';
@@ -76,6 +89,7 @@ export const libraryUploadWidgetHtml = `<!doctype html>
       const result=await host.uploadFile(file,{library:true});
       if(!result||typeof result.fileId!=='string')throw Error('Inget fil-ID returnerades');
       uploadedId=result.fileId;
+      handoffButton.disabled=typeof host.sendFollowUpMessage!=='function';
       let diagnostic='ChatGPT returnerade fil-ID: '+uploadedId+'. ';
       if(typeof host.getFileDownloadUrl==='function'){
         try{
@@ -90,6 +104,7 @@ export const libraryUploadWidgetHtml = `<!doctype html>
           }else diagnostic+='Återläsning gav ingen URL. ';
         }catch(e){diagnostic+='Återläsning misslyckades: '+String(e&&e.message||e)+'. ';}
       }else diagnostic+='Återläsningsfunktionen saknas. ';
+      diagnostic+=typeof host.sendFollowUpMessage==='function'?' Du kan också prova Testa i konversationen (referens, ingen bilaga). ':' Funktionen för konversationstest saknas. ';
       if(typeof host.selectFiles==='function'){
         verifyButton.disabled=false;
         diagnostic+='Välj Kontrollera biblioteket och välj filen om den finns.';
