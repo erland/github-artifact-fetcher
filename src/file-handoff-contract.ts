@@ -29,6 +29,6 @@ export function stageHandoff(files:EphemeralFiles,file:FileOutput,baseUrl:string
  verifyFileForDelivery(file);
  const staged=files.stage(file,baseUrl,owner);
  const result=handoffContract(file,staged);
- if(owner&&file.sizeBytes<=5*1024*1024)result.resourceUri='github-artifact-fetcher://files/'+new URL(staged.url).pathname.split('/').pop();
+ if(owner&&file.sizeBytes<=256*1024)result.resourceUri='github-artifact-fetcher://files/'+new URL(staged.url).pathname.split('/').pop();
  return result;
 }

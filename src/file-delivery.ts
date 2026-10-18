@@ -23,7 +23,7 @@ export class EphemeralFiles {
  resource(id:string,owner:string):{blob:string;mimeType:string;sizeBytes:number;sha256:string}|null{
   if(!/^[a-f0-9]{64}$/.test(id))return null;
   const item=this.files.get(id);
-  if(!item||item.owner!==owner||item.expires<=this.now()||item.bytes.length>5*1024*1024)return null;
+  if(!item||item.owner!==owner||item.expires<=this.now()||item.bytes.length>256*1024)return null;
   return {blob:item.bytes.toString('base64'),mimeType:item.mime,sizeBytes:item.bytes.length,sha256:item.sha256};
  }
  serve(id:string,res:ServerResponse):boolean{

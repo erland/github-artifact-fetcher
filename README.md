@@ -1,17 +1,26 @@
 # GitHub Artifact Fetcher
 
-System Builder CREATE — DEV-002 TypeScript/MCP baseline. **Not production ready.**
+Read-only GitHub MCP connector for release assets, repository archives and GitHub Actions artifacts.
+
+## Delivery policy
+
+- For release files up to **256 KiB** (262,144 bytes), use `get_small_release_asset`. The file is returned as base64 MCP binary content. This is **not** a native ChatGPT attachment, and large MCP binary outputs are intentionally avoided.
+- For larger release files, use `list_release_assets` and its `githubUrl` link. The user downloads the original file from GitHub and attaches it to ChatGPT if needed. The service does **not** download the binary merely to discover it is too large.
+- Repository archives: `get_repository_archive_link` returns a commit-pinned GitHub archive URL without downloading the archive. The older `fetch_repository_archive` returns that URL too.
+- Actions artifacts: `list_workflow_artifacts` returns a GitHub Actions run-page link (not a direct binary download URL). The older `fetch_workflow_artifact` stages files no larger than 256 KiB and returns the GitHub page for larger files.
+- `fetch_release_asset` and `read_small_file` remain for two-step legacy integrations, capped at 256 KiB for the returned MCP binary; release assets larger than that return `githubUrl` without downloading bytes.
+
+GitHub links also work for private repositories when the user is signed in to GitHub and has permission. GitHub Actions artifacts may require navigating to the workflow run.
+
+The temporary HTTPS staging endpoint is retained for compatibility, but it is no longer used by any ChatGPT Library widget. Library-upload experimentation and its CORS test flags have been removed.
 
 ## Build and test
 
-Node >=22; run `npm run build && npm test` (TypeScript compiler required). `npm start` exposes HTTP on port 3000 with `/health`, `/ready`, and a restricted `/mcp` JSON-RPC endpoint. It currently reports capabilities only, and does **not** download GitHub files. The DEV-001 PoC remains in `poc/` and can be exercised using `npm run test:poc`.
+Node.js 22 or later.
 
-CI installs TypeScript and builds/tests/containerizes the project. The Dockerfile builds without access to the host's global `tsc`; therefore remote build requires npm registry reachability.
+```sh
+npm ci
+npm run verify
+```
 
-## Verification state
-
-DEV-001 local transport passed; live ChatGPT output-file acceptance is deferred. DEV-002 implementation and 8/8 local tests passed; official MCP SDK integration, Docker and CI still require verification. See `docs/DEV-002.md` and `.system-builder/work-status.yaml`.
-
-## Design
-
-See `docs/functional-specification.md`, `docs/architecture.md`, `docs/development-plan.md`. Target remains OAuth-protected, read-only GitHub fetch service with standalone PostgreSQL database and automatic Flyway startup migrations (DEV-003). No deployment has been performed.
+The service uses `/health`, `/ready` and `/mcp`, and requires configured authentication and database settings in production.
