@@ -8,7 +8,7 @@ export const libraryUploadWidgetHtml = `<!doctype html>
 </head><body>
 <h3>Spara GitHub-fil i ChatGPT-biblioteket (experiment)</h3>
 <p id="details">Filen hämtas separat från MCP-konversationen. Tryck för att prova.</p>
-<button id="save" type="button">Spara i biblioteket</button>
+<button id="save" type="button">Spara i biblioteket</button> <button id="verify" type="button" disabled>Kontrollera biblioteket</button>
 <p id="status" role="status" aria-live="polite"></p>
 <p id="fallback"></p>
 <script>
@@ -16,7 +16,8 @@ export const libraryUploadWidgetHtml = `<!doctype html>
   const host=window.openai;
   const output=host&&host.toolOutput;
   const item=output&&typeof output==='object'?(output.structuredContent||output):null;
-  const button=document.getElementById('save'),status=document.getElementById('status');
+  const button=document.getElementById('save'),verifyButton=document.getElementById('verify'),status=document.getElementById('status');
+  let uploadedId=null;
   const fallback=document.getElementById('fallback');
   const valid=item&&typeof item.downloadUrl==='string'&&typeof item.filename==='string'&&
     typeof item.mimeType==='string'&&Number.isSafeInteger(item.sizeBytes)&&item.sizeBytes>0&&item.sizeBytes<=20*1024*1024;
@@ -28,6 +29,17 @@ export const libraryUploadWidgetHtml = `<!doctype html>
     button.disabled=true;status.textContent='Automatisk uppladdning stöds inte här. Använd GitHub-länken i stället.';
     return;
   }
+  verifyButton.addEventListener('click',async()=>{
+    if(!uploadedId||typeof host?.selectFiles!=='function')return;
+    try{
+      const chosen=await host.selectFiles();
+      if(!Array.isArray(chosen)||chosen.length===0){
+        status.textContent='Ingen fil valdes i biblioteket. Bibliotekslagring är inte verifierad.';return;
+      }
+      const match=chosen.some(x=>x&&((x.fileId===uploadedId)||(x.fileName===item.filename)));
+      status.textContent=match?'Filen hittades via biblioteksväljaren: '+item.filename+'.':'Valda biblioteksfiler matchade inte '+item.filename+'.';
+    }catch(e){status.textContent='Bibliotekskontroll misslyckades: '+String(e&&e.message||e);}
+  });
   button.addEventListener('click',async()=>{
     button.disabled=true;status.textContent='Hämtar filen…';
     let phase='nedladdning';
@@ -45,7 +57,21 @@ export const libraryUploadWidgetHtml = `<!doctype html>
       status.textContent='Sparar filen i ChatGPT-biblioteket…';
       const result=await host.uploadFile(file,{library:true});
       if(!result||typeof result.fileId!=='string')throw Error('Inget fil-ID returnerades');
-      status.textContent='Uppladdning rapporterad av ChatGPT. Fil-ID: '+result.fileId+'. Kontrollera att filen syns i biblioteket.';
+      uploadedId=result.fileId;
+      let diagnostic='ChatGPT returnerade fil-ID: '+uploadedId+'. ';
+      if(typeof host.getFileDownloadUrl==='function'){
+        try{
+          const readback=await host.getFileDownloadUrl({fileId:uploadedId});
+          if(readback&&typeof readback.downloadUrl==='string'){
+            diagnostic+='Återläsnings-URL skapad (filen har ännu inte verifierats i biblioteket). ';
+          }else diagnostic+='Återläsning gav ingen URL. ';
+        }catch(e){diagnostic+='Återläsning misslyckades: '+String(e&&e.message||e)+'. ';}
+      }else diagnostic+='Återläsningsfunktionen saknas. ';
+      if(typeof host.selectFiles==='function'){
+        verifyButton.disabled=false;
+        diagnostic+='Välj Kontrollera biblioteket och välj filen om den finns.';
+      }else diagnostic+='Biblioteksväljaren stöds inte i den här klienten.';
+      status.textContent=diagnostic;
     }catch(error){status.textContent='Fel vid '+phase+': '+String(error&&error.message||error)+'. Kontrollera nätverk/CORS/CSP eller använd GitHub-länken.';}
     finally{button.disabled=false;}
   });

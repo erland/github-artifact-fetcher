@@ -12,3 +12,11 @@ test('experimental Library widget requests explicit user consent and keeps binar
  assert.match(libraryUploadWidgetHtml,/GitHub-länken/);
  assert.doesNotMatch(libraryUploadWidgetHtml,/read_small_file|atob\(/);
 });
+
+test('widget distinguishes upload receipt from Library verification',()=>{
+ assert.match(libraryUploadWidgetHtml,/getFileDownloadUrl/);
+ assert.match(libraryUploadWidgetHtml,/selectFiles/);
+ assert.match(libraryUploadWidgetHtml,/Kontrollera biblioteket/);
+ assert.match(libraryUploadWidgetHtml,/Bibliotekslagring är inte verifierad/);
+ assert.doesNotMatch(libraryUploadWidgetHtml,/Uppladdning rapporterad av ChatGPT/);
+});
