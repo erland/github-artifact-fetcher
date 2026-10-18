@@ -49,7 +49,16 @@ function mcpHandler(user:string,identity:GitHubIdentity|undefined,files:Ephemera
    server.registerTool('list_workflow_artifacts',{description:'Preferred user-facing workflow: list workflow artifacts and their GitHub run-page links without downloading files. Ask the user to download the desired artifact from GitHub and attach it.',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive()})},async({repository,runId})=>({content:[{type:'text',text:JSON.stringify(await actions.list(user,repository,runId))}]}));
    server.registerTool('fetch_workflow_artifact',{description:'Compatibility/integration only: fetch artifact into temporary HTTPS handoff (not native ChatGPT attachment). For ordinary ChatGPT use list_workflow_artifacts and manual file attachment.',inputSchema:z.object({repository:z.string(),runId:z.number().int().positive(),artifactId:z.number().int().positive()})},async({repository,runId,artifactId})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await actions.download(user,repository,runId,artifactId),publicBaseUrl,user))}]}));
    server.registerTool('list_release_assets',{description:'Preferred user-facing workflow: list release asset metadata and GitHub browser download URLs without downloading binary files. Ask the user to download and attach the selected file.',inputSchema:z.object({repository:z.string(),tag:z.string()})},async({repository,tag})=>({content:[{type:'text',text:JSON.stringify(await releases.list(user,repository,tag))}]}));
-   server.registerTool('fetch_release_asset',{description:'Compatibility/integration only: fetch a release asset into temporary HTTPS handoff (not native ChatGPT attachment). For ordinary ChatGPT use list_release_assets and ask the user to download and attach via githubUrl.',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>({content:[{type:'text',text:JSON.stringify(stageHandoff(files,await releases.fetch(user,repository,tag,assetName),publicBaseUrl,user))}]}));
+   server.registerTool('fetch_release_asset',{description:'Legacy compatibility: for assets <=256 KiB stage an optional binary handoff. Larger release assets return the original GitHub download URL without fetching bytes. Prefer get_small_release_asset for small binary transfers.',inputSchema:z.object({repository:z.string(),tag:z.string(),assetName:z.string()})},async({repository,tag,assetName})=>{
+    const assets=await releases.list(user,repository,tag);
+    const matches=assets.filter(a=>a.name===assetName);
+    if(matches.length!==1)throw Error('ASSET_NOT_FOUND');
+    if(!Number.isSafeInteger(matches[0].size)||matches[0].size<1||matches[0].size>262144)
+      return {content:[{type:'text' as const,text:JSON.stringify({delivery:'github_url',sizeBytes:matches[0].size,githubUrl:matches[0].githubUrl,filename:assetName})}]};
+    const file=await releases.fetch(user,repository,tag,assetName);
+    if(file.sizeBytes>262144)throw Error('SMALL_FILE_SIZE_CHANGED');
+    return {content:[{type:'text' as const,text:JSON.stringify(stageHandoff(files,file,publicBaseUrl,user))}]};
+   });
   }
   return server;
  });
