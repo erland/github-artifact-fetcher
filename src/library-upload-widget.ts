@@ -18,9 +18,27 @@ export const libraryUploadWidgetHtml = `<!doctype html>
   const item=output&&typeof output==='object'?(output.structuredContent||output):null;
   const button=document.getElementById('save'),verifyButton=document.getElementById('verify'),status=document.getElementById('status');
   let uploadedId=null;
+  async function sha256Hex(blob){
+    if(!globalThis.crypto?.subtle)throw Error('SHA-256 stöds inte i denna klient');
+    const bytes=await blob.arrayBuffer();
+    const digest=await crypto.subtle.digest('SHA-256',bytes);
+    return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+  }
+  async function verifyReadback(downloadUrl){
+    const address=new URL(downloadUrl);
+    if(address.protocol!=='https:')throw Error('Återläsning kräver HTTPS');
+    const result=await fetch(address.toString(),{credentials:'omit',cache:'no-store'});
+    if(!result.ok)throw Error('Återläsning gav HTTP '+result.status);
+    const bytes=await result.blob();
+    if(bytes.size!==item.sizeBytes)throw Error('Återläst fil har fel storlek: '+bytes.size);
+    const hash=await sha256Hex(bytes);
+    if(hash.toLowerCase()!==item.sha256.toLowerCase())throw Error('SHA-256 skiljer sig från GitHub-originalet');
+    return true;
+  }
+
   const fallback=document.getElementById('fallback');
   const valid=item&&typeof item.downloadUrl==='string'&&typeof item.filename==='string'&&
-    typeof item.mimeType==='string'&&Number.isSafeInteger(item.sizeBytes)&&item.sizeBytes>0&&item.sizeBytes<=20*1024*1024;
+    typeof item.mimeType==='string'&&/^[a-fA-F0-9]{64}$/.test(item.sha256)&&Number.isSafeInteger(item.sizeBytes)&&item.sizeBytes>0&&item.sizeBytes<=20*1024*1024;
   if(item&&typeof item.githubUrl==='string'){
     const a=document.createElement('a');a.href=item.githubUrl;a.textContent='Ladda ned på GitHub i stället';a.target='_blank';a.rel='noopener noreferrer';fallback.append(a);
   }
@@ -63,7 +81,12 @@ export const libraryUploadWidgetHtml = `<!doctype html>
         try{
           const readback=await host.getFileDownloadUrl({fileId:uploadedId});
           if(readback&&typeof readback.downloadUrl==='string'){
-            diagnostic+='Återläsnings-URL skapad (filen har ännu inte verifierats i biblioteket). ';
+            diagnostic+='Återläsningsadress skapad. ';
+            try{
+              const checked=await verifyReadback(readback.downloadUrl);
+              if(checked)diagnostic+='Integritet verifierad: storlek och SHA-256 stämmer. ';
+            }catch(e){diagnostic+='Filens innehåll kunde inte verifieras: '+String(e&&e.message||e)+'. ';}
+            diagnostic+='Bibliotekslagring är fortfarande inte verifierad. ';
           }else diagnostic+='Återläsning gav ingen URL. ';
         }catch(e){diagnostic+='Återläsning misslyckades: '+String(e&&e.message||e)+'. ';}
       }else diagnostic+='Återläsningsfunktionen saknas. ';
